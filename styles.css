@@ -4,6 +4,8 @@ button:disabled{opacity:.55;cursor:default}
 .review-fields{margin:12px 0;border:1px solid #dce3d9;border-radius:10px;padding:10px;min-width:0}
 .review-fields legend{font-size:.9rem;font-weight:bold}
 #exportSaudiReview{margin-top:7px}
+.clear-room{display:flex;align-items:center;gap:8px}
+.clear-room input{width:auto;margin:0}
 #slabCutPanel{border-top:1px solid var(--line);margin-top:1rem;padding-top:.4rem}
 #slabCutPanel p,#slabReport{font-size:.83rem;color:var(--muted)}
 #slabReport{margin-top:1rem}

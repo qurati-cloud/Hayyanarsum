@@ -1,6 +1,6 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
-import { cleanSaudiInputs, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
+import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type!=='wall'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type!=='wall'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type!=='wall'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
@@ -9,11 +9,12 @@ const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)
 const itemLabel = shape => S.levels.length === 1 ? shape.name : shape.name + ' · ' + elementLevel(shape, S.levels)?.name;
 const quantityFor = shape => shape.type === 'wall' ? length(shape) : shape.type === 'slab' ? slabNetArea(shape) : area(shape);
 function boq(){$('boq').innerHTML=S.shapes.map(s=>{const q=quantityFor(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(itemLabel(s))}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='wall'?'م ط':(s.type==='slab'?'م² · '+slabVolume(s).toFixed(3)+' م³':'م²')}</td><td><input class="rate" data-id="${s.id}" type="number" min="0" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=S.shapes.reduce((n,s)=>n+quantityFor(s)*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
-function addRectangle(type, x, y, w = numberField('shapeW'), h = numberField('shapeH'), name = $('shapeName').value) {
+function addRectangle(type, x, y, w = numberField('shapeW'), h = numberField('shapeH'), name = $('shapeName').value, manual = true) {
   const heightInput = $(type === 'slab' ? 'slabThickness' : 'roomZ').value;
   const z = heightInput === '' ? null : Number(heightInput);
   const shape = { id: crypto.randomUUID(), type, name: name.trim().slice(0, 160) || (type === 'slab' ? 'بلاطة' : 'مساحة'),
     x, y, w, h, z, levelId: S.activeLevel, layer: type === 'slab' ? 'S-SLAB' : $('layer').value };
+  if (type === 'room' && manual) Object.assign(shape, roomReviewFields());
   if (!valid(shape)) {
     $('mode').textContent = type === 'slab' ? 'أدخل سماكة وأبعادًا صالحة للبلاطة.' : 'أدخل أبعادًا موجبة وصالحة.';
     return false;
@@ -24,8 +25,8 @@ function addRectangle(type, x, y, w = numberField('shapeW'), h = numberField('sh
   return true;
 }
 function pt(e){const r=$('svg').getBoundingClientRect();return{x:snap((e.clientX-r.left)*1200/r.width/PX),y:snap((e.clientY-r.top)*700/r.height/PX)}}
-$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else start=pt(e)};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(['room','slab'].includes(S.tool)?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(['room','slab'].includes(S.tool)&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
-document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));syncRectangleEditor();$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view))}};
+$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else{if(S.tool==='room')$('roomClear').checked=false;start=pt(e)}};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(['room','slab'].includes(S.tool)?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(['room','slab'].includes(S.tool)&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
+document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));syncRectangleEditor();$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view));if(v.dataset.view==='compliance')runChecks()}};
 function selectShape(id) {
   S.selected = id;
   const shape = S.shapes.find(item => item.id === id);
@@ -41,6 +42,8 @@ function selectShape(id) {
         $('slabThickness').value = shape.z;
       } else {
         $('roomZ').value = shape.z ?? '';
+        $('roomUse').value = shape.roomUse ?? '';
+        $('roomClear').checked = shape.clearRoom === true;
       }
     }
   }
@@ -50,8 +53,18 @@ function selectShape(id) {
 function syncRectangleEditor() {
   const selected = S.shapes.find(shape => shape.id === S.selected);
   $('slabFields').hidden = S.tool !== 'slab' && selected?.type !== 'slab';
+  $('roomReviewFields').hidden = S.tool === 'slab' || (selected?.type !== 'room' && (selected?.type === 'slab' || S.tool === 'wall'));
+  $('roomClear').disabled = !$('roomUse').value;
   $('editRoom').textContent = selected?.type === 'slab' ? 'تحديث البلاطة المحددة' : 'تحديث المساحة المحددة';
   $('insert').textContent = S.tool === 'slab' ? 'إدراج البلاطة بالأبعاد' : 'إدراج المساحة بالأبعاد';
+}
+for (const [use, rule] of Object.entries(residentialSpaceRules)) $('roomUse').add(new Option(rule.label, use));
+for (const id of ['roomUse', 'shapeW', 'shapeH']) $(id).oninput = () => {
+  $('roomClear').checked = false;
+  $('roomClear').disabled = !$('roomUse').value;
+};
+function roomReviewFields() {
+  return residentialRoomMetadata($('roomUse').value, $('roomClear').checked);
 }
 
 function drawSlab(group, slab) {
@@ -317,6 +330,8 @@ $('editRoom').onclick = () => {
   if (current.type === 'slab') {
     Object.assign(updated, { x: numberField('slabX'), y: numberField('slabY'), z: numberField('slabThickness'),
       layer: 'S-SLAB', name: $('shapeName').value.trim().slice(0, 160) || 'بلاطة' });
+  } else {
+    Object.assign(updated, roomReviewFields());
   }
   if (!valid(updated)) {
     $('mode').textContent = 'أدخل أبعادًا موجبة وصالحة.';
@@ -384,7 +399,7 @@ $('run').onclick = () => {
   }
   const [, name, width, height] = match;
   const origin = 2 + S.shapes.length / 2;
-  $('commandResult').textContent = addRectangle('room', origin, origin, Number(width), Number(height), name ? 'غرفة نوم' : 'مساحة')
+  $('commandResult').textContent = addRectangle('room', origin, origin, Number(width), Number(height), name ? 'غرفة نوم' : 'مساحة', false)
     ? 'أُضيفت مساحة بأبعاد ' + width + ' × ' + height + ' م.'
     : 'أدخل أبعادًا موجبة وصالحة.';
 };
@@ -449,7 +464,7 @@ function addSiteEdge(edge = {}) {
 
 function runChecks() {
   const input = readReviewInputs();
-  const results = saudiProjectReview(input, $('siteCity').value);
+  const results = reviewResults(input, $('siteCity').value);
   const drafts = results.filter(result => result.status === 'draft').length;
   $('checks').childNodes[0].nodeValue = drafts;
   $('summary').textContent = drafts ? 'مقارنات استرشادية: ' + drafts : 'مسار المراجعة حسب البيانات المدخلة';
@@ -470,6 +485,9 @@ function runChecks() {
     }
     $('results').append(card);
   }
+}
+function reviewResults(input, city) {
+  return [...saudiProjectReview(input, city), ...saudiModelReview(input, city, S.shapes, S.levels)];
 }
 function updateReviewInputs() {
   $('apartmentMeasurements').hidden = $('workType').value !== 'new' ||
@@ -521,7 +539,7 @@ $('exportSaudiReview').onclick = () => {
       saudiEdgeKinds[edge.kind], edge.kind === 'street' ? edge.streetWidth ?? '' : '', edge.setback ?? '']));
   }
   rows.push([], ['الفحص', 'الحالة', 'النتيجة', 'المرجع', 'الرابط']);
-  for (const result of saudiProjectReview(input, city)) {
+  for (const result of reviewResults(input, city)) {
     rows.push([result.title, reviewLabels[result.status], result.message, result.source, result.url]);
   }
   dl('hayyanarsum-saudi-review.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
@@ -557,6 +575,7 @@ function readProject(data) {
     const levelId = level.id;
     const { id, type, name, layer, x, y, w, h, z, x2, y2, thickness, openings, cutouts } = shape;
     return type !== 'wall' ? { id, type, name: name.slice(0, 160), layer, levelId, x, y, w, h, z,
+      ...(type === 'room' ? residentialRoomMetadata(shape.roomUse, shape.clearRoom) : {}),
       cutouts: type === 'slab' ? cutouts?.map(cut => ({ x: cut.x, y: cut.y, w: cut.w, h: cut.h, name: cut.name.trim().slice(0, 120) })) : undefined }
       : { id, type, name: name.slice(0, 160), layer, levelId, x, y, x2, y2, z, thickness,
           openings: openings?.map(({ kind, offset, width, sill, height }) => ({ kind, offset, width, sill, height })) };

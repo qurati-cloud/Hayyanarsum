@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanSaudiInputs, saudiProjectReview, saudiSources } from '../engine.js';
+import { cleanSaudiInputs, residentialRoomMetadata, saudiModelReview, saudiProjectReview, saudiSources } from '../engine.js';
 
 const input = cleanSaudiInputs({
   municipality: 'بلدية الاختبار', parcelReference: 'قطعة اختبار',
@@ -57,4 +57,30 @@ test('commercial parking is a separate lower bound and accessibility stays a rev
   const homes = { ...input, buildingType:'apartment' };
   assert.match(saudiProjectReview(homes, 'جدة').at(-1).message, /دون عتبة/);
   assert.match(saudiProjectReview({ ...homes, units:4 }, 'جدة').at(-1).message, /تندرج/);
+});
+
+test('room checks use finished clear dimensions and detect width and area independently', () => {
+  const room = { type:'room', name:'فراغ اختبار', x:0, y:0, w:2, h:4, roomUse:'bedroom', clearRoom:true };
+  const options = saudiModelReview(input, 'الرياض', [
+    room, { ...room, w:2.1, h:3 }, { ...room, w:4, h:2.1 }, { ...room, clearRoom:false },
+  ]);
+  assert.equal(options[0].status, 'review');
+  assert.match(options[0].source, /SBC 602/);
+  assert.match(options[1].message, /أقل من المرجع: العرض\./);
+  assert.match(options[2].message, /أقل من المرجع: المساحة\./);
+  assert.match(options[3].message, /تبلغ الحدود/);
+  assert.equal(options[4].status, 'pending');
+  assert.match(options[1].source, /5-1-4/);
+});
+
+test('corridor comparison uses only width; unknown uses and projects do not get guessed', () => {
+  const room = { type:'room', x:0, y:0, w:.9, h:3, roomUse:'corridor', clearRoom:true };
+  const matches = saudiModelReview({ ...input, buildingType:'villa' }, 'جدة', [
+    room, { ...room, roomUse:'custom' },
+  ]);
+  assert.equal(matches[1].status, 'draft');
+  assert.doesNotMatch(matches[1].message, /الحد المرجعي \S+ م²/);
+  assert.equal(matches[2].status, 'pending');
+  assert.deepEqual(residentialRoomMetadata('bedroom', 'true'), { roomUse:'bedroom', clearRoom:false });
+  assert.deepEqual(saudiModelReview({ ...input, workType:'alteration' }, 'جدة', [room]), []);
 });

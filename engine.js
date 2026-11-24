@@ -392,6 +392,70 @@ export function saudiProjectReview(input, city) {
   return results;
 }
 
+export const residentialSpaceRules = Object.freeze({
+  living: Object.freeze({ label: 'مجلس أو صالة أو غرفة طعام', width: 2.8, area: 11.2 }),
+  bedroom: Object.freeze({ label: 'غرفة نوم', width: 2.1, area: 6.5 }),
+  kitchen: Object.freeze({ label: 'مطبخ', width: 1.8, area: 5 }),
+  bathroom: Object.freeze({ label: 'حمّام', width: 1.4, area: 2.8 }),
+  toilet: Object.freeze({ label: 'دورة مياه (مرحاض)', width: 1, area: 1.5 }),
+  corridor: Object.freeze({ label: 'ممر داخلي سكني', width: .9, area: null }),
+});
+
+export function residentialRoomMetadata(use, clear) {
+  const roomUse = typeof use === 'string' && Object.hasOwn(residentialSpaceRules, use) ? use : '';
+  return { roomUse, clearRoom: Boolean(roomUse && clear === true) };
+}
+
+export function saudiModelReview(input, city, shapes, levels = [groundLevel]) {
+  if (input.workType !== 'new' || !city?.trim() || !input.municipality || !input.parcelReference ||
+      !['apartment', 'mixed-apartment', 'villa'].includes(input.buildingType)) return [];
+  const results = [{
+    status: 'review',
+    title: 'مراجعة الاستدامة وكفاءة الطاقة للمبنى السكني',
+    message: 'راجع ترشيد الطاقة والمياه والعزل الحراري للأسطح والجدران وفق أجزاء الكود المدونة في المرجع، بعد تأكيد إصدارها المنطبق. تتطلب المراجعة بيانات المواد وتكوين الغلاف.',
+    source: 'اشتراطات إنشاء المباني السكنية، 5-1-2، بندا 1 و2 · SBC 201 وSBC 602',
+    url: residentialReference.url,
+  }];
+  const source = 'اشتراطات إنشاء المباني السكنية، 5-1-4، بند 2، جدول الغرف والفراغات';
+  const rooms = shapes.filter(shape => shape.type === 'room' && valid(shape));
+  let unclassified = 0;
+  for (const room of rooms) {
+    const { roomUse, clearRoom } = residentialRoomMetadata(room.roomUse, room.clearRoom);
+    if (!roomUse) {
+      unclassified++;
+      continue;
+    }
+    const rule = residentialSpaceRules[roomUse];
+    const level = elementLevel(room, levels);
+    const title = [room.name || 'مساحة', rule.label, level?.name].filter(Boolean).join(' · ');
+    const width = Math.min(room.w, room.h);
+    const size = area(room);
+    const widthLow = width < rule.width - tolerance;
+    const areaLow = rule.area !== null && size < rule.area - tolerance;
+    const widthText = 'العرض الصافي ' + width.toFixed(2) + ' م، والحد المرجعي ' + rule.width.toFixed(2) + ' م.';
+    const areaText = rule.area === null ? '' : ' المساحة الصافية ' + size.toFixed(2) + ' م²، والحد المرجعي ' + rule.area.toFixed(2) + ' م².';
+    const shortfalls = [widthLow ? 'العرض' : '', areaLow ? 'المساحة' : ''].filter(Boolean);
+    results.push({
+      status: clearRoom ? 'draft' : 'pending',
+      title,
+      message: clearRoom
+        ? widthText + areaText + ' ' + (shortfalls.length ? 'أقل من المرجع: ' + shortfalls.join('، ') + '.' : 'المدخلات تبلغ الحدود المرجعية.')
+        : 'أكّد أن القياسات تمثل الأبعاد الصافية لهذا الفراغ المستطيل بعد التشطيب.',
+      source,
+      url: residentialReference.url,
+    });
+  }
+  if (unclassified || !rooms.length) {
+    results.push({
+      status: 'pending', title: 'تصنيف الفراغات السكنية',
+      message: unclassified ? 'عدد المساحات غير المصنفة: ' + unclassified + '. حدّد الاستخدام للفراغات السكنية المعنية.'
+        : 'أضف مساحة في المخطط وحدّد استخدامها السكني لبدء المقارنة.',
+      source, url: residentialReference.url,
+    });
+  }
+  return results;
+}
+
 export function dxf(shapes) {
   const records = [
     '0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1015',
