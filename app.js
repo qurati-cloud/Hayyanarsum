@@ -1,4 +1,5 @@
 import { exportIfc, isIfcWall } from './ifc.js';
+import { wallVolumeSummary } from './wall-volume.js';
 import{snap,area,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type==='room'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type==='room'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type==='room'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
@@ -94,7 +95,21 @@ function renderWallEditor() {
       row.insertCell().textContent = value;
     }
   }
+  if ($('wallReport').open) updateWallVolume();
 }
+
+function updateWallVolume() {
+  const { separateVolume, netVolume, overlap, omitted } = wallVolumeSummary(S.shapes);
+  const display = value => value.toLocaleString('ar-SA', { maximumFractionDigits: 4 });
+  const omittedNote = omitted ? ' جدران دون أبعاد مجسّمة: ' + omitted + '.' : '';
+  $('wallVolumeSummary').textContent = netVolume === null
+    ? 'تعذّر حساب التقاطعات لهذا النموذج. مجموع الأحجام لكل جدار: ' + display(separateVolume) + ' م³.' + omittedNote
+    : 'صافي حجم الجدران بعد خصم الفتحات والتقاطعات: ' + display(netVolume) +
+      ' م³. حجم التكرار المخصوم: ' + display(overlap) + ' م³.' + omittedNote;
+}
+$('wallReport').ontoggle = () => {
+  if ($('wallReport').open) updateWallVolume();
+};
 
 function saveWall(wall, message) {
   if (!valid(wall)) {
@@ -171,6 +186,17 @@ $('csv').onclick = () => {
         [shape.name + ' · صافي الحجم', shape.layer, netVolume, 'م³', '', '']);
     }
   }
+  const summary = wallVolumeSummary(S.shapes);
+  if (summary.walls) {
+    rows.push(['مجموع الأحجام الفردية', '', summary.separateVolume, 'م³', '', '']);
+    if (summary.netVolume === null) {
+      rows.push(['تعذّر حساب التقاطعات لهذا النموذج', '', '', '', '', '']);
+    } else {
+      rows.push(['حجم التكرار المخصوم عند التقاطعات', '', summary.overlap, 'م³', '', ''],
+        ['إجمالي صافي حجم الجدران', '', summary.netVolume, 'م³', '', '']);
+    }
+  }
+  if (summary.omitted) rows.push(['جدران دون أبعاد مجسّمة', '', summary.omitted, 'عدد', '', '']);
   dl('hayyanarsum-boq.csv','\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');
 };
 $('run').onclick = () => {
