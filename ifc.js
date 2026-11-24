@@ -1,4 +1,4 @@
-import { elementLevel, length, slabArea, slabVolume, valid, validateLevels, wallQuantities } from './engine.js';
+import { elementLevel, length, slabArea, slabNetArea, slabVolume, valid, validateLevels, wallQuantities } from './engine.js';
 
 const ifcAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 const missing = '$';
@@ -141,10 +141,16 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels) {
     const ref = entity('IFCSLAB', ...root(slab.name || 'Slab', stableId), missing, pose,
       box(slab.w, slab.h, slab.z), stepString(slab.id || ''), '.FLOOR.');
     storey.contained.push(ref);
+    for (const cut of slab.cutouts ?? []) {
+      const cutPose = local(pose, cut.x, slab.h / 2 - cut.y - cut.h / 2, -.001);
+      const opening = entity('IFCOPENINGELEMENT', ...root(cut.name), missing, cutPose,
+        box(cut.w, cut.h, slab.z + .002), missing, '.OPENING.');
+      entity('IFCRELVOIDSELEMENT', ...root(''), ref, opening);
+    }
     const measures = [
       ['LENGTH', 'Width', slab.z],
-      ['AREA', 'GrossArea', slabArea(slab)], ['AREA', 'NetArea', slabArea(slab)],
-      ['VOLUME', 'GrossVolume', slabVolume(slab)], ['VOLUME', 'NetVolume', slabVolume(slab)],
+      ['AREA', 'GrossArea', slabArea(slab)], ['AREA', 'NetArea', slabNetArea(slab)],
+      ['VOLUME', 'GrossVolume', slabArea(slab) * slab.z], ['VOLUME', 'NetVolume', slabVolume(slab)],
     ].map(([type, label, value]) => entity('IFCQUANTITY' + type, stepString(label), missing, missing, real(value), missing));
     const set = entity('IFCELEMENTQUANTITY', ...root('Qto_SlabBaseQuantities'), missing, tuple(measures));
     entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([ref]), set);

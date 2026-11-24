@@ -59,15 +59,23 @@ def validate_export():
     assert slab.ContainedInStructure[0].RelatingStructure.Elevation == 3.25
     world = ifcopenshell.geom.settings()
     world.set("use-world-coords", True)
-    solid = ifcopenshell.geom.create_shape(world, slab).geometry
+    slab_model = ifcopenshell.geom.create_shape(world, slab)
+    solid = slab_model.geometry
     x_coords = solid.verts[0::3]
     y_coords = solid.verts[1::3]
     z_coords = solid.verts[2::3]
     assert math.isclose(min(x_coords), 1) and math.isclose(max(x_coords), 5)
     assert math.isclose(min(y_coords), -7) and math.isclose(max(y_coords), -2)
     assert math.isclose(min(z_coords), 3.05) and math.isclose(max(z_coords), 3.25)
-    assert math.isclose(ifcopenshell.util.shape.get_volume(solid), 4)
-    print("Validated IFC4 storeys, hosted openings, and 4 m³ slab at the correct XY position and elevation.")
+    assert math.isclose(ifcopenshell.util.shape.get_volume(solid), 3.6)
+    void, = slab.HasOpenings
+    opening = void.RelatedOpeningElement
+    assert opening.Name == "فتحة الدرج" and not opening.HasFillings
+    cut_model = ifcopenshell.geom.create_shape(world, opening)
+    cut = cut_model.geometry.verts
+    assert math.isclose(min(cut[0::3]), 2) and math.isclose(max(cut[0::3]), 3)
+    assert math.isclose(min(cut[1::3]), -5.5) and math.isclose(max(cut[1::3]), -3.5)
+    print("Validated IFC4 storeys, hosted openings, and 3.6 m³ net slab after cutting the stair void.")
 
 
 if __name__ == "__main__":

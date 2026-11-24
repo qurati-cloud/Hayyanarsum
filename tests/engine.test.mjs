@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { snap, totalArea, slabArea, slabVolume, length, compliance, dxf, valid, roomProjection, wallParts, wallQuantities } from '../engine.js';
+import { snap, totalArea, slabArea, slabNetArea, slabParts, slabVolume, length, compliance, dxf, valid, roomProjection, wallParts, wallQuantities } from '../engine.js';
+
+test('slab openings change plan, solids and quantities and cannot overlap or cross an edge', () => {
+  const opening = { name:'درج', x:1, y:1.5, w:1, h:2 };
+  const slab = { type:'slab', x:1, y:2, w:4, h:5, z:.2, cutouts:[opening] };
+  assert.ok(valid(slab));
+  assert.equal(slabNetArea(slab), 18);
+  assert.equal(slabVolume(slab), 3.6);
+  assert.equal(slabParts(slab).reduce((sum, part) => sum +
+    (part.base[1][0] - part.base[0][0]) * (part.base[3][1] - part.base[0][1]), 0), 18);
+  assert.match(dxf([slab]), /S-OPEN/);
+  assert.equal(valid({ ...slab, w:2 }), false);
+  assert.equal(valid({ ...slab, cutouts:[opening, { ...opening, x:1.5 }] }), false);
+});
 
 test('slab has its own area and volume and projects below the storey elevation', () => {
   const slab = { type:'slab', x:2, y:3, w:4, h:5, z:0.2, levelId:'upper', layer:'S-SLAB' };

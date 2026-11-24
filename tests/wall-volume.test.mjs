@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { wallVolumeSummary } from '../wall-volume.js';
+import { slabVolumeSummary, wallVolumeSummary } from '../wall-volume.js';
+
+test('slab union discounts overlapping concrete but retains concrete that fills another slab opening', () => {
+  const solid = { type:'slab', x:0, y:0, w:4, h:5, z:.2 };
+  const cut = { ...solid, cutouts:[{ name:'درج', x:1, y:1.5, w:1, h:2 }] };
+  near(slabVolumeSummary([cut, cut]).netVolume, 3.6);
+  const both = slabVolumeSummary([cut, solid]);
+  near(both.netVolume, 4);
+  near(both.overlap, 3.6);
+  near(slabVolumeSummary([cut, { ...cut, levelId:'upper' }],
+    [{ id:'ground', elevation:0 }, { id:'upper', elevation:3.25 }]).netVolume, 7.2);
+});
 
 const wall = (x, y, x2, y2, extra = {}) =>
   ({ type: 'wall', x, y, x2, y2, thickness: 0.2, z: 3, openings: [], ...extra });

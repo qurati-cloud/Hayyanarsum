@@ -1,4 +1,4 @@
-import { elementLevel, groundLevel, valid, wallParts, wallQuantities } from './engine.js';
+import { elementLevel, groundLevel, slabParts, slabVolume, valid, wallParts, wallQuantities } from './engine.js';
 
 const maxWork = 3_000_000;
 
@@ -54,12 +54,23 @@ function footprintUnion(polygons, spend) {
 }
 
 export function wallVolumeSummary(shapes, storeys = [groundLevel]) {
-  const walls = shapes.filter(shape => shape.type === 'wall' && shape.thickness != null && valid(shape) && elementLevel(shape, storeys));
-  const omitted = shapes.filter(shape => shape.type === 'wall').length - walls.length;
-  const separateVolume = walls.reduce((volume, wall) => volume + wallQuantities(wall).netVolume, 0);
-  const parts = walls.flatMap(wall => {
-    const { elevation } = elementLevel(wall, storeys);
-    return wallParts(wall).map(part => ({ ...part, bottom: part.bottom + elevation, top: part.top + elevation }));
+  const walls = shapes.filter(shape => shape.type === 'wall');
+  const solid = walls.filter(wall => wall.thickness != null && valid(wall) && elementLevel(wall, storeys));
+  return { ...unionVolumeSummary(solid, storeys, wallParts, wall => wallQuantities(wall).netVolume),
+    omitted: walls.length - solid.length, walls: solid.length };
+}
+
+export function slabVolumeSummary(shapes, storeys = [groundLevel]) {
+  const slabs = shapes.filter(shape => shape.type === 'slab' && valid(shape) && elementLevel(shape, storeys));
+  return { ...unionVolumeSummary(slabs, storeys, slabParts, slabVolume), slabs: slabs.length };
+}
+
+function unionVolumeSummary(elements, storeys, split, volumeOf) {
+  const separateVolume = elements.reduce((volume, element) => volume + volumeOf(element), 0);
+  if (elements.length < 2) return { separateVolume, netVolume: separateVolume, overlap: 0 };
+  const parts = elements.flatMap(element => {
+    const { elevation } = elementLevel(element, storeys);
+    return split(element).map(part => ({ ...part, bottom: part.bottom + elevation, top: part.top + elevation }));
   });
   const levels = [...new Set(parts.flatMap(part => [part.bottom, part.top]))].sort((a, b) => a - b);
   let work = 0;
@@ -78,11 +89,11 @@ export function wallVolumeSummary(shapes, storeys = [groundLevel]) {
       unionVolume += footprintUnion(footprints, spend) * height;
     }
     // Bound floating-point drift at the no-overlap and fully empty limits.
-    const netVolume = walls.length === 1 ? separateVolume : Math.max(0, Math.min(separateVolume, unionVolume));
+    const netVolume = Math.max(0, Math.min(separateVolume, unionVolume));
     const overlap = separateVolume - netVolume;
-    return { separateVolume, netVolume, overlap, omitted, walls: walls.length };
+    return { separateVolume, netVolume, overlap };
   } catch (error) {
     if (error !== limit) throw error;
-    return { separateVolume, netVolume: null, overlap: null, omitted, walls: walls.length };
+    return { separateVolume, netVolume: null, overlap: null };
   }
 }

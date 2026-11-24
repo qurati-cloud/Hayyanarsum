@@ -1,7 +1,9 @@
 export const snap = (value, step = 0.5) => Math.round(value / step) * step;
 export const area = shape => shape.type === 'room' ? shape.w * shape.h : 0;
 export const slabArea = shape => shape.w * shape.h;
-export const slabVolume = shape => slabArea(shape) * shape.z;
+export const slabOpeningArea = shape => (shape.cutouts ?? []).reduce((sum, cut) => sum + cut.w * cut.h, 0);
+export const slabNetArea = shape => Math.max(0, slabArea(shape) - slabOpeningArea(shape));
+export const slabVolume = shape => slabNetArea(shape) * shape.z;
 export const length = shape => shape.type === 'wall' ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
 export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
 
@@ -32,6 +34,43 @@ export function validHeight(height) {
 }
 
 const tolerance = 1e-9;
+
+export function validSlabCutouts(slab) {
+  if (slab.cutouts === undefined) return true;
+  if (!Array.isArray(slab.cutouts) || slab.cutouts.length > 30) return false;
+  return slab.cutouts.every((cut, index) => {
+    if (!cut || typeof cut.name !== 'string' || !cut.name.trim() ||
+      ![cut.x, cut.y, cut.w, cut.h].every(Number.isFinite) ||
+      cut.x <= tolerance || cut.y <= tolerance || cut.w < .01 || cut.h < .01 ||
+      cut.x + cut.w >= slab.w - tolerance || cut.y + cut.h >= slab.h - tolerance) return false;
+    return slab.cutouts.slice(0, index).every(other =>
+      cut.x + cut.w <= other.x + tolerance || other.x + other.w <= cut.x + tolerance ||
+      cut.y + cut.h <= other.y + tolerance || other.y + other.h <= cut.y + tolerance);
+  });
+}
+
+export function slabParts(slab) {
+  const cutouts = slab.cutouts ?? [];
+  const divisions = [...new Set([0, slab.w, ...cutouts.flatMap(cut => [cut.x, cut.x + cut.w])])].sort((a, b) => a - b);
+  const parts = [];
+  for (let index = 1; index < divisions.length; index++) {
+    const left = divisions[index - 1];
+    const right = divisions[index];
+    const holes = cutouts.filter(cut => cut.x <= left && cut.x + cut.w >= right).sort((a, b) => a.y - b.y);
+    const add = (min, max) => {
+      if (max <= min) return;
+      const x = slab.x + left, x2 = slab.x + right, y = slab.y + min, y2 = slab.y + max;
+      parts.push({ base: [[x, y], [x2, y], [x2, y2], [x, y2]], bottom: -slab.z, top: 0 });
+    };
+    let last = 0;
+    for (const cut of holes) {
+      add(last, cut.y);
+      last = Math.max(last, cut.y + cut.h);
+    }
+    add(last, slab.h);
+  }
+  return parts;
+}
 
 export function validWallDetails(wall) {
   const { z, thickness, openings } = wall;
@@ -132,11 +171,11 @@ export function roomProjection(shapes, degrees, levels = [groundLevel]) {
     if (!level || !validHeight(shape.z)) continue;
     if (shape.type === 'wall') {
       for (const part of wallParts(shape)) addPrism(shape, part.base, part.bottom + level.elevation, part.top + level.elevation);
+    } else if (shape.type === 'slab') {
+      for (const part of slabParts(shape)) addPrism(shape, part.base, part.bottom + level.elevation, level.elevation);
     } else {
       const { x, y, w, h, z } = shape;
-      const bottom = shape.type === 'slab' ? level.elevation - z : level.elevation;
-      const top = shape.type === 'slab' ? level.elevation : level.elevation + z;
-      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], bottom, top);
+      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], level.elevation, level.elevation + z);
     }
   }
   return faces.sort((left, right) => left.depth - right.depth);
@@ -150,7 +189,7 @@ export function valid(shape) {
   return values.every(Number.isFinite) &&
     (shape.type === 'wall' ? length(shape) > 0 && validWallDetails(shape)
       : shape.w > 0 && shape.h > 0 && (shape.type === 'slab'
-        ? validHeight(shape.z) && Number.isFinite(slabVolume(shape))
+        ? validHeight(shape.z) && validSlabCutouts(shape) && Number.isFinite(slabVolume(shape))
         : shape.z == null || validHeight(shape.z)));
 }
 
@@ -228,6 +267,11 @@ export function dxf(shapes) {
     line(x + w, y, x + w, y + h, layer);
     line(x + w, y + h, x, y + h, layer);
     line(x, y + h, x, y, layer);
+    if (shape.type === 'slab') for (const cut of shape.cutouts ?? []) {
+      const left = x + cut.x, top = y + cut.y, right = left + cut.w, bottom = top + cut.h;
+      const corners = [[left, top], [right, top], [right, bottom], [left, bottom]];
+      corners.forEach(([px, py], index) => line(px, py, ...corners[(index + 1) % 4], 'S-OPEN'));
+    }
   }
   return [...records, '0', 'ENDSEC', '0', 'EOF', ''].join('\r\n');
 }
