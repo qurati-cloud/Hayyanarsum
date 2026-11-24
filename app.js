@@ -1,4 +1,5 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
+import { cleanAssembly, cleanThermalAssemblies, compareAssembly, evaluateAssembly, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
@@ -489,6 +490,135 @@ function runChecks() {
 function reviewResults(input, city) {
   return [...saudiProjectReview(input, city), ...saudiModelReview(input, city, S.shapes, S.levels)];
 }
+
+const thermalFields = {
+  name: 'thermalName', kind: 'thermalKind', inside: 'thermalInside', outside: 'thermalOutside',
+  target: 'thermalTarget', city: 'thermalCity', reference: 'thermalReference',
+};
+const thermalLabel = value => value.toLocaleString('ar-SA', { maximumSignificantDigits: 5 });
+const thermalList = () => S.project.thermal ?? [];
+function thermalComparisonText(assembly, city) {
+  const comparison = compareAssembly(assembly, city);
+  if (comparison.status === 'pending') return 'أكّد مرجع الحد وطابق مدينته مع المدينة المحفوظة للمشروع.';
+  if (comparison.status === 'none') return 'أضف الحد المرجعي الخاص بالمشروع لإجراء المقارنة.';
+  return 'مقارنة استرشادية بالحد المدخل (' + thermalLabel(assembly.target) + ' W/m²·K). ' +
+    (comparison.within ? 'القيمة المحسوبة ضمن الحد.' : 'القيمة المحسوبة تتجاوز الحد.') + ' المرجع: ' + comparison.reference;
+}
+
+function addThermalLayer(layer = {}) {
+  const list = $('thermalLayers');
+  if (list.childElementCount >= 30) return;
+  const row = document.createElement('fieldset');
+  row.className = 'review-fields thermal-layer';
+  const legend = document.createElement('legend');
+  legend.textContent = 'طبقة مادة';
+  row.append(legend);
+  for (const [key, labelText] of [['name','المادة'], ['mm','السماكة (ملم)'], ['conductivity','الموصلية λ (W/m·K)']]) {
+    const label = document.createElement('label');
+    label.textContent = labelText;
+    const field = document.createElement('input');
+    field.dataset.key = key;
+    if (key !== 'name') {
+      field.type = 'number';
+      field.step = 'any';
+      field.min = '0';
+      field.required = true;
+    }
+    field.value = layer[key] ?? '';
+    label.append(field);
+    row.append(label);
+  }
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.textContent = 'إزالة الطبقة';
+  remove.onclick = () => { row.remove(); adjustThermalLayers(); markThermalDraft(); };
+  row.append(remove);
+  list.append(row);
+  adjustThermalLayers();
+}
+
+function adjustThermalLayers() {
+  const list = $('thermalLayers');
+  $('thermalLayerAdd').disabled = list.childElementCount >= 30;
+  for (const button of list.querySelectorAll('button')) button.disabled = list.childElementCount <= 1;
+}
+
+function readThermalForm() {
+  const input = { id: $('thermalSelect').value };
+  for (const [key, id] of Object.entries(thermalFields)) {
+    input[key] = ['inside','outside','target'].includes(key) ? numberField(id) : $(id).value;
+  }
+  input.layers = [...$('thermalLayers').children].map(row => Object.fromEntries(
+    [...row.querySelectorAll('input')].map(field => [field.dataset.key, field.type === 'number' ? field.valueAsNumber : field.value])));
+  return cleanAssembly(input);
+}
+
+function renderThermalResult(assembly) {
+  const panel = $('thermalResult');
+  panel.replaceChildren();
+  const result = evaluateAssembly(assembly);
+  if (!result) return;
+  const values = document.createElement('p');
+  values.textContent = 'المقاومة الكلية R = ' + thermalLabel(result.totalResistance) +
+    ' م²·K/W · معامل الانتقال U = ' + thermalLabel(result.transmittance) + ' W/m²·K';
+  const breakdown = document.createElement('ol');
+  assembly.layers.forEach((layer, index) => {
+    const item = document.createElement('li');
+    item.textContent = (layer.name || 'طبقة ' + (index + 1)) + ': R = ' + thermalLabel(result.resistances[index]) + ' م²·K/W';
+    breakdown.append(item);
+  });
+  const comparison = document.createElement('p');
+  comparison.textContent = thermalComparisonText(assembly, S.project.city);
+  panel.append(values, breakdown, comparison);
+}
+
+function loadThermalForm(selected = '') {
+  const list = thermalList();
+  const picker = $('thermalSelect');
+  picker.replaceChildren(new Option('تجميعة جديدة', ''), ...list.map(entry => new Option(entry.name, entry.id)));
+  const assembly = list.find(entry => entry.id === selected);
+  picker.value = assembly?.id ?? '';
+  for (const [key, id] of Object.entries(thermalFields)) $(id).value = assembly?.[key] ?? (key === 'kind' ? 'wall' : '');
+  $('thermalLayers').replaceChildren();
+  for (const layer of assembly?.layers ?? [{}]) addThermalLayer(layer);
+  $('thermalStatus').textContent = '';
+  renderThermalResult(assembly ?? {});
+}
+
+function markThermalDraft() {
+  $('thermalResult').replaceChildren();
+  $('thermalStatus').textContent = 'أعد الحساب لحفظ القيم المعدّلة.';
+}
+$('thermalLayerAdd').onclick = () => { addThermalLayer(); markThermalDraft(); };
+$('thermalSelect').onchange = event => loadThermalForm(event.target.value);
+$('thermalForm').oninput = event => { if (event.target.id !== 'thermalSelect') markThermalDraft(); };
+$('thermalForm').onsubmit = event => {
+  event.preventDefault();
+  const assembly = readThermalForm();
+  if (!assembly.name || !evaluateAssembly(assembly)) {
+    $('thermalStatus').textContent = 'أدخل اسمًا، ومقاومتي السطح، وسماكة وموصلية موجبة لكل طبقة.';
+    return;
+  }
+  if (assembly.target !== null && assembly.target <= 0) {
+    $('thermalStatus').textContent = 'أدخل حد U موجبًا أو اتركه فارغًا.';
+    return;
+  }
+  const previous = thermalList();
+  if (!assembly.id && previous.length >= 100) {
+    $('thermalStatus').textContent = 'بلغ المشروع الحد الأقصى للتجميعات المحفوظة.';
+    return;
+  }
+  const saved = assembly.id ? previous.map(entry => entry.id === assembly.id ? assembly : entry)
+    : [...previous, { ...assembly, id: crypto.randomUUID() }];
+  S.project.thermal = saved;
+  loadThermalForm(assembly.id || saved.at(-1).id);
+  try {
+    localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
+    $('thermalStatus').textContent = 'حُسبت التجميعة وحُفظت في المشروع.';
+  } catch {
+    $('thermalStatus').textContent = 'تعذّر الحفظ المحلي. يمكنك حفظ التجميعة بتصدير ملف المشروع.';
+  }
+};
 function updateReviewInputs() {
   $('apartmentMeasurements').hidden = $('workType').value !== 'new' ||
     !['apartment','mixed-apartment'].includes($('buildingType').value);
@@ -542,6 +672,14 @@ $('exportSaudiReview').onclick = () => {
   for (const result of reviewResults(input, city)) {
     rows.push([result.title, reviewLabels[result.status], result.message, result.source, result.url]);
   }
+  if (thermalList().length) {
+    rows.push([], ['العزل الحراري', 'نوع العنصر', 'R الكلية (م²·K/W)', 'U المحسوب (W/m²·K)', 'المقارنة']);
+    for (const assembly of thermalList()) {
+      const result = evaluateAssembly(assembly);
+      rows.push([assembly.name, thermalKinds[assembly.kind], result.totalResistance,
+        result.transmittance, thermalComparisonText(assembly, city)]);
+    }
+  }
   dl('hayyanarsum-saudi-review.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
 for (const source of saudiSources) {
@@ -582,6 +720,7 @@ function readProject(data) {
   });
   const project = {};
   project.saudi = cleanSaudiInputs(data.project?.saudi);
+  project.thermal = cleanThermalAssemblies(data.project?.thermal);
   for (const key of ['name','city','revision','description']) {
     if (typeof data.project?.[key] === 'string') project[key] = data.project[key].slice(0, 4000);
   }
@@ -599,6 +738,7 @@ function loadProjectFields() {
   }
   document.querySelectorAll('[data-tool]').forEach(button => button.classList.toggle('active', button.dataset.tool === S.tool));
   loadSaudiFields();
+  loadThermalForm(thermalList()[0]?.id);
 }
 function loadSaudiFields() {
   const saved = cleanSaudiInputs(S.project.saudi);

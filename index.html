@@ -73,6 +73,25 @@
   <button id="exportSaudiReview" type="button">تنزيل تقرير المراجعة CSV</button>
   <p id="reviewSaved" role="status"></p>
 </form><div><div id="summary" class="summary"></div><div id="results"></div></div></div>
+<details class="panel thermal-panel" id="thermalPanel">
+  <summary>حساب العزل ومعامل انتقال الحرارة U</summary>
+  <p>لجدار أو سقف خارجي مؤلف من طبقات متجانسة. أدخل قيم الموصلية ومقاومتي السطح من مصدر التصميم. <a href="https://www.iso.org/standard/65708.html">مرجع الطريقة ISO 6946</a></p>
+  <form id="thermalForm">
+    <label>التجميعات المحفوظة<select id="thermalSelect"></select></label>
+    <div class="two"><label>اسم التجميعة<input id="thermalName" maxlength="180" required></label><label>العنصر<select id="thermalKind"><option value="wall">جدار خارجي</option><option value="roof">سقف خارجي</option></select></label></div>
+    <div class="two"><label>مقاومة السطح الداخلي (م²·K/W)<input id="thermalInside" type="number" min="0" step="any" required></label><label>مقاومة السطح الخارجي (م²·K/W)<input id="thermalOutside" type="number" min="0" step="any" required></label></div>
+    <div id="thermalLayers"></div>
+    <button id="thermalLayerAdd" type="button">إضافة طبقة</button>
+    <details class="review-fields"><summary>مقارنة بحد U موثّق للمشروع</summary>
+      <div class="two"><label>الحد الأعلى U (W/m²·K)<input id="thermalTarget" type="number" min="0" step="any"></label><label>مدينة المرجع<input id="thermalCity" maxlength="180"></label></div>
+      <label>مرجع الحد: الإصدار والمادة وتاريخ النفاذ<input id="thermalReference" maxlength="300"></label>
+    </details>
+    <button id="thermalSave" class="primary" type="submit">احسب واحفظ التجميعة</button>
+  </form>
+  <p id="thermalStatus" role="status"></p>
+  <section id="thermalResult" aria-live="polite"></section>
+  <p class="muted">الحساب يخص الجزء المصمت. الجسور الحرارية والنوافذ وتسرب الهواء تحتاج نماذج منفصلة.</p>
+</details>
 <section class="panel"><div class="heading"><div><em>سجل المصادر</em><h2>الأكواد والأنظمة</h2></div></div><div id="sources"></div></section><section class="panel"><em>الهوية المكانية</em><h2>الطرز المعمارية السعودية التسعة عشر</h2><p>موجهات تصميمية مكانية؛ لا تُعامل تلقائيًا كقيم إنشائية أو كود بناء.</p><div id="styles" class="chips"></div></section></section>
 <section id="project" class="view"><div class="pagehead"><div><em>Project Control</em><h1>لوحة المشروع</h1></div></div><div class="projectgrid"><form class="panel" id="projectForm"><h2>بيانات المشروع</h2><label>الاسم<input id="projectName" value="مشروع جديد"></label><div class="two"><label>المدينة<input id="projectCity" value="الرياض"></label><label>الإصدار<input id="revision" value="P01"></label></div><label>الوصف<textarea id="description"></textarea></label><button class="primary">حفظ</button><p id="saved"></p></form><section class="panel"><h2>حالة الوحدات</h2><div id="modules"></div></section><section class="panel wide"><h2>حدود السلامة والاعتماد</h2><ul><li>لا تصدر المنصة شهادة امتثال أو اعتماد هندسي.</li><li>التحليل الإنشائي وMEP يحتاج محركًا متخصصًا ومراجعة مهندس مرخص.</li><li>لا تُفعّل قواعد المدن والمناطق التطويرية قبل توثيق نطاقها ونفاذها.</li><li>النتائج الأولية لا تُستخدم للتنفيذ دون مراجعة مهنية.</li></ul></section></div></section></main>
 <footer><b>هيا نرسم · هندسة تبدأ بفكرة.</b><span>Hayyanarsum · Engineering begins with an idea.</span></footer><script type="module" src="app.js"></script></body></html>
