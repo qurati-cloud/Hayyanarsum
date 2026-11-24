@@ -1,4 +1,4 @@
-import { elementLevel, length, valid, validateLevels, wallQuantities } from './engine.js';
+import { elementLevel, length, slabArea, slabVolume, valid, validateLevels, wallQuantities } from './engine.js';
 
 const ifcAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 const missing = '$';
@@ -39,10 +39,12 @@ const mode = '.ELEMENT.';
 const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 export const isIfcWall = shape => shape?.type === 'wall' && shape.thickness != null && valid(shape);
+export const isIfcSlab = shape => shape?.type === 'slab' && valid(shape);
 
 export function exportIfc(shapes, projectName = 'Hayyanarsum', levels) {
   const walls = shapes.filter(isIfcWall);
-  if (!walls.length) throw new TypeError('No modeled walls to export');
+  const slabs = shapes.filter(isIfcSlab);
+  if (!walls.length && !slabs.length) throw new TypeError('No modeled building elements to export');
   const storeys = validateLevels(levels);
   const data = [];
   const entity = (type, ...args) => {
@@ -131,11 +133,27 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels) {
       storey.contained.push(fill);
     }
   }
+  for (const slab of slabs) {
+    const storey = spatial.get(elementLevel(slab, storeys)?.id);
+    if (!storey) throw new TypeError('Slab refers to an unknown storey');
+    const pose = local(storey.placement, slab.x, -(slab.y + slab.h / 2), -slab.z);
+    const stableId = uuidPattern.test(slab.id) ? slab.id : undefined;
+    const ref = entity('IFCSLAB', ...root(slab.name || 'Slab', stableId), missing, pose,
+      box(slab.w, slab.h, slab.z), stepString(slab.id || ''), '.FLOOR.');
+    storey.contained.push(ref);
+    const measures = [
+      ['LENGTH', 'Width', slab.z],
+      ['AREA', 'GrossArea', slabArea(slab)], ['AREA', 'NetArea', slabArea(slab)],
+      ['VOLUME', 'GrossVolume', slabVolume(slab)], ['VOLUME', 'NetVolume', slabVolume(slab)],
+    ].map(([type, label, value]) => entity('IFCQUANTITY' + type, stepString(label), missing, missing, real(value), missing));
+    const set = entity('IFCELEMENTQUANTITY', ...root('Qto_SlabBaseQuantities'), missing, tuple(measures));
+    entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([ref]), set);
+  }
   for (const { ref, contained } of spatial.values()) {
     if (contained.length) entity('IFCRELCONTAINEDINSPATIALSTRUCTURE', ...root(''), tuple(contained), ref);
   }
   return [
-    'ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('Hayyanarsum wall model'),'2;1');",
+    'ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('Hayyanarsum building model'),'2;1');",
     "FILE_NAME('hayyanarsum.ifc'," + stepString(new Date().toISOString()) + ",(''),(''),'Hayyanarsum','Hayyanarsum','');",
     "FILE_SCHEMA(('IFC4'));", 'ENDSEC;', 'DATA;', ...data, 'ENDSEC;', 'END-ISO-10303-21;', '',
   ].join('\n');

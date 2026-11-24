@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { snap, totalArea, length, compliance, dxf, valid, roomProjection, wallParts, wallQuantities } from '../engine.js';
+import { snap, totalArea, slabArea, slabVolume, length, compliance, dxf, valid, roomProjection, wallParts, wallQuantities } from '../engine.js';
+
+test('slab has its own area and volume and projects below the storey elevation', () => {
+  const slab = { type:'slab', x:2, y:3, w:4, h:5, z:0.2, levelId:'upper', layer:'S-SLAB' };
+  assert.ok(valid(slab));
+  assert.equal(slabArea(slab), 20);
+  assert.equal(slabVolume(slab), 4);
+  assert.equal(totalArea([slab]), 0);
+  assert.equal(valid({ ...slab, z:0 }), false);
+  const [top] = roomProjection([slab], 0, [{ id:'upper', elevation:3.25 }]).filter(face => face.kind === 'top');
+  assert.ok(Math.abs(top.points[0].y - (1.5 - 3.25 * Math.sqrt(.75))) < 1e-9);
+  assert.match(dxf([slab]), /S-SLAB/);
+});
 
 const wall = {
   type: 'wall', x: 0, y: 0, x2: 3, y2: 4, z: 3, thickness: 0.2, layer: 'A-WALL',

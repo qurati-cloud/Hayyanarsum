@@ -1,43 +1,56 @@
-import { exportIfc, isIfcWall } from './ifc.js';
+import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { wallVolumeSummary } from './wall-volume.js';
-import{snap,area,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{snap,area,slabArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
-function dimension(s){const g=$('dims'),t=el('text',{x:(s.type==='room'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type==='room'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type==='room'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
-function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=s.type==='room'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${s.type==='room'?area(s).toFixed(2)+' م²':length(s).toFixed(2)+' م'}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type === 'room'); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels()}
+function dimension(s){const g=$('dims'),t=el('text',{x:(s.type!=='wall'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type!=='wall'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type!=='wall'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
+function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=s.type!=='wall'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(s.type==='wall'?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type !== 'wall'); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels()}
 const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);
 const itemLabel = shape => S.levels.length === 1 ? shape.name : shape.name + ' · ' + elementLevel(shape, S.levels)?.name;
-function boq(){$('boq').innerHTML=S.shapes.map(s=>{const q=s.type==='room'?area(s):length(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(itemLabel(s))}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='room'?'م²':'م ط'}</td><td><input class="rate" data-id="${s.id}" type="number" min="0" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=S.shapes.reduce((n,s)=>n+(s.type==='room'?area(s):length(s))*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
-function addRoom(x = 2, y = 2, w = Number($('shapeW').value), h = Number($('shapeH').value), name = $('shapeName').value) {
-  const heightInput = $('roomZ').value;
+const quantityFor = shape => shape.type === 'wall' ? length(shape) : shape.type === 'slab' ? slabArea(shape) : area(shape);
+function boq(){$('boq').innerHTML=S.shapes.map(s=>{const q=quantityFor(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(itemLabel(s))}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='wall'?'م ط':(s.type==='slab'?'م² · '+slabVolume(s).toFixed(3)+' م³':'م²')}</td><td><input class="rate" data-id="${s.id}" type="number" min="0" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=S.shapes.reduce((n,s)=>n+quantityFor(s)*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
+function addRectangle(type, x, y, w = numberField('shapeW'), h = numberField('shapeH'), name = $('shapeName').value) {
+  const heightInput = $(type === 'slab' ? 'slabThickness' : 'roomZ').value;
   const z = heightInput === '' ? null : Number(heightInput);
-  const shape = { id: crypto.randomUUID(), type: 'room', name: name.slice(0, 160) || 'مساحة',
-    x, y, w, h, z, levelId: S.activeLevel, layer: $('layer').value };
+  const shape = { id: crypto.randomUUID(), type, name: name.trim().slice(0, 160) || (type === 'slab' ? 'بلاطة' : 'مساحة'),
+    x, y, w, h, z, levelId: S.activeLevel, layer: type === 'slab' ? 'S-SLAB' : $('layer').value };
   if (!valid(shape)) {
-    $('mode').textContent = 'أدخل أبعادًا موجبة وصالحة.';
+    $('mode').textContent = type === 'slab' ? 'أدخل سماكة وأبعادًا صالحة للبلاطة.' : 'أدخل أبعادًا موجبة وصالحة.';
     return false;
   }
   commit();
   S.shapes.push(shape);
-  S.selected = shape.id;
-  render();
+  selectShape(shape.id);
   return true;
 }
 function pt(e){const r=$('svg').getBoundingClientRect();return{x:snap((e.clientX-r.left)*1200/r.width/PX),y:snap((e.clientY-r.top)*700/r.height/PX)}}
-$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else start=pt(e)};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(S.tool==='room'?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(S.tool==='room'&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
-document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view))}};
+$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else start=pt(e)};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(['room','slab'].includes(S.tool)?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(['room','slab'].includes(S.tool)&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
+document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));syncRectangleEditor();$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view))}};
 function selectShape(id) {
   S.selected = id;
   const shape = S.shapes.find(item => item.id === id);
   if (shape) {
     $('shapeName').value = shape.name;
     $('layer').value = shape.layer;
-    if (shape.type === 'room') {
+    if (shape.type !== 'wall') {
       $('shapeW').value = shape.w;
       $('shapeH').value = shape.h;
-      $('roomZ').value = shape.z ?? '';
+      if (shape.type === 'slab') {
+        $('slabX').value = shape.x;
+        $('slabY').value = shape.y;
+        $('slabThickness').value = shape.z;
+      } else {
+        $('roomZ').value = shape.z ?? '';
+      }
     }
   }
   render();
+}
+
+function syncRectangleEditor() {
+  const selected = S.shapes.find(shape => shape.id === S.selected);
+  $('slabFields').hidden = S.tool !== 'slab' && selected?.type !== 'slab';
+  $('editRoom').textContent = selected?.type === 'slab' ? 'تحديث البلاطة المحددة' : 'تحديث المساحة المحددة';
+  $('insert').textContent = S.tool === 'slab' ? 'إدراج البلاطة بالأبعاد' : 'إدراج المساحة بالأبعاد';
 }
 function activateLevel(id) {
   S.activeLevel = id;
@@ -209,21 +222,25 @@ $('openingRemove').onclick = () => {
   saveWall({ ...wall, openings: wall.openings.filter((_, item) => item !== Number(index)) }, 'حُذفت الفتحة.');
 };
 $('editRoom').onclick = () => {
-  const current = S.shapes.find(shape => shape.id === S.selected && shape.type === 'room');
+  const current = S.shapes.find(shape => shape.id === S.selected && shape.type !== 'wall');
   if (!current) return;
   const updated = { ...current, name: $('shapeName').value.slice(0, 160) || 'مساحة',
     w: Number($('shapeW').value), h: Number($('shapeH').value),
     z: $('roomZ').value === '' ? null : Number($('roomZ').value), layer: $('layer').value };
+  if (current.type === 'slab') {
+    Object.assign(updated, { x: numberField('slabX'), y: numberField('slabY'), z: numberField('slabThickness'),
+      layer: 'S-SLAB', name: $('shapeName').value.trim().slice(0, 160) || 'بلاطة' });
+  }
   if (!valid(updated)) {
     $('mode').textContent = 'أدخل أبعادًا موجبة وصالحة.';
     return;
   }
   commit();
   S.shapes = S.shapes.map(shape => shape.id === updated.id ? updated : shape);
-  $('mode').textContent = 'حُدّثت المساحة المحددة.';
+  $('mode').textContent = current.type === 'slab' ? 'حُدّثت البلاطة المحددة.' : 'حُدّثت المساحة المحددة.';
   render();
 };
-$('insert').onclick=()=>addRoom();$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
+$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
 function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('exportSVG').onclick=()=>dl('hayyanarsum.svg',new XMLSerializer().serializeToString($('svg')),'image/svg+xml');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 const csvCell = value => {
   const raw = String(value);
@@ -233,10 +250,11 @@ const csvCell = value => {
 $('csv').onclick = () => {
   const rows = [['العنصر','الطبقة','الكمية','الوحدة','سعر الوحدة','الإجمالي']];
   for (const shape of S.shapes) {
-    const quantity = shape.type === 'room' ? area(shape) : length(shape);
+    const quantity = quantityFor(shape);
     const rate = S.prices[shape.id] ?? 0;
     const label = itemLabel(shape);
-    rows.push([label,shape.layer,quantity,shape.type === 'room' ? 'م²' : 'م',rate,quantity * rate]);
+    rows.push([label,shape.layer,quantity,shape.type === 'wall' ? 'م' : 'م²',rate,quantity * rate]);
+    if (shape.type === 'slab') rows.push([label + ' · الحجم', shape.layer, slabVolume(shape), 'م³', '', '']);
     if (shape.type === 'wall' && shape.thickness != null) {
       const { openingArea, netArea, netVolume } = wallQuantities(shape);
       rows.push([label + ' · مساحة الفتحات', shape.layer, openingArea, 'م²', '', ''],
@@ -268,7 +286,7 @@ $('run').onclick = () => {
   }
   const [, name, width, height] = match;
   const origin = 2 + S.shapes.length / 2;
-  $('commandResult').textContent = addRoom(origin, origin, Number(width), Number(height), name ? 'غرفة نوم' : 'مساحة')
+  $('commandResult').textContent = addRectangle('room', origin, origin, Number(width), Number(height), name ? 'غرفة نوم' : 'مساحة')
     ? 'أُضيفت مساحة بأبعاد ' + width + ' × ' + height + ' م.'
     : 'أدخل أبعادًا موجبة وصالحة.';
 };
@@ -315,7 +333,7 @@ function readProject(data) {
     if (!level) throw new TypeError('Unknown element storey');
     const levelId = level.id;
     const { id, type, name, layer, x, y, w, h, z, x2, y2, thickness, openings } = shape;
-    return type === 'room' ? { id, type, name: name.slice(0, 160), layer, levelId, x, y, w, h, z }
+    return type !== 'wall' ? { id, type, name: name.slice(0, 160), layer, levelId, x, y, w, h, z }
       : { id, type, name: name.slice(0, 160), layer, levelId, x, y, x2, y2, z, thickness,
           openings: openings?.map(({ kind, offset, width, sill, height }) => ({ kind, offset, width, sill, height })) };
   });
@@ -338,16 +356,16 @@ function loadProjectFields() {
   document.querySelectorAll('[data-tool]').forEach(button => button.classList.toggle('active', button.dataset.tool === S.tool));
 }
 function updateIfcExport() {
-  const count = S.shapes.filter(isIfcWall).length;
+  const count = S.shapes.filter(shape => isIfcWall(shape) || isIfcSlab(shape)).length;
   $('exportIFC').disabled = count === 0;
   $('ifcStatus').textContent = count
-    ? 'يشمل التصدير الجدران ذات السماكة والارتفاع وفتحاتها: ' + count + ' جدار.'
-    : 'أدخل سماكة جدار وارتفاعه لتفعيل التصدير.';
+    ? 'عناصر الجدران والبلاطات المشمولة بالتصدير: ' + count + '.'
+    : 'أضف بلاطة أو أدخل سماكة جدار وارتفاعه لتفعيل التصدير.';
 }
 $('exportIFC').onclick = () => {
   try {
     dl('hayyanarsum.ifc', exportIfc(S.shapes, S.project.name, S.levels), 'application/x-step');
-    $('ifcStatus').textContent = 'جُهّز ملف IFC4 للجدران والفتحات.';
+    $('ifcStatus').textContent = 'جُهّز ملف IFC4 لعناصر المبنى.';
   } catch {
     $('ifcStatus').textContent = 'تعذّر إنشاء ملف IFC. تحقق من أبعاد الجدران والفتحات.';
   }
@@ -363,10 +381,11 @@ function render3d() {
   const canvas = $('model3d');
   canvas.replaceChildren();
   const walls = S.shapes.filter(shape => shape.type === 'wall' && validHeight(shape.z));
-  const shaped = walls.length ? walls : S.shapes.filter(shape => shape.type === 'room' && validHeight(shape.z));
+  const slabs = S.shapes.filter(isIfcSlab);
+  const shaped = walls.length || slabs.length ? [...walls, ...slabs] : S.shapes.filter(shape => shape.type === 'room' && validHeight(shape.z));
   const faces = roomProjection(shaped, Number($('azimuth').value), S.levels);
-  $('modelNote').textContent = walls.length
-    ? 'الجدران المعروضة: ' + walls.length + '. تعرض المعاينة الجدران المعرّفة وفتحاتها.'
+  $('modelNote').textContent = walls.length || slabs.length
+    ? 'الجدران: ' + walls.length + ' · البلاطات: ' + slabs.length
     : shaped.length ? 'المساحات المجسّمة: ' + shaped.length
       : 'أدخل ارتفاع المساحة أو حدّد جدارًا وأدخل سماكته وارتفاعه.';
   if (!faces.length) return;

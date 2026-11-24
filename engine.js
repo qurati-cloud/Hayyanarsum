@@ -1,5 +1,7 @@
 export const snap = (value, step = 0.5) => Math.round(value / step) * step;
 export const area = shape => shape.type === 'room' ? shape.w * shape.h : 0;
+export const slabArea = shape => shape.w * shape.h;
+export const slabVolume = shape => slabArea(shape) * shape.z;
 export const length = shape => shape.type === 'wall' ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
 export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
 
@@ -132,20 +134,24 @@ export function roomProjection(shapes, degrees, levels = [groundLevel]) {
       for (const part of wallParts(shape)) addPrism(shape, part.base, part.bottom + level.elevation, part.top + level.elevation);
     } else {
       const { x, y, w, h, z } = shape;
-      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], level.elevation, z + level.elevation);
+      const bottom = shape.type === 'slab' ? level.elevation - z : level.elevation;
+      const top = shape.type === 'slab' ? level.elevation : level.elevation + z;
+      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], bottom, top);
     }
   }
   return faces.sort((left, right) => left.depth - right.depth);
 }
 
 export function valid(shape) {
-  if (!shape || !['room', 'wall'].includes(shape.type)) return false;
-  const values = shape.type === 'room'
-    ? [shape.x, shape.y, shape.w, shape.h, shape.x + shape.w, shape.y + shape.h, area(shape)]
+  if (!shape || !['room', 'wall', 'slab'].includes(shape.type)) return false;
+  const values = shape.type !== 'wall'
+    ? [shape.x, shape.y, shape.w, shape.h, shape.x + shape.w, shape.y + shape.h, shape.w * shape.h]
     : [shape.x, shape.y, shape.x2, shape.y2, length(shape)];
   return values.every(Number.isFinite) &&
-    (shape.type === 'room' ? shape.w > 0 && shape.h > 0 && (shape.z == null || validHeight(shape.z))
-      : length(shape) > 0 && validWallDetails(shape));
+    (shape.type === 'wall' ? length(shape) > 0 && validWallDetails(shape)
+      : shape.w > 0 && shape.h > 0 && (shape.type === 'slab'
+        ? validHeight(shape.z) && Number.isFinite(slabVolume(shape))
+        : shape.z == null || validHeight(shape.z)));
 }
 
 export const residentialReference = Object.freeze({

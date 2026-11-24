@@ -14,4 +14,6 @@ const levels = [
   { id: 'upper', name: 'الطابق الأول', elevation: 3.25 },
 ];
 const upperWall = { ...wall, id: '22334455-6677-4899-aabb-ccddeeff0012', levelId: 'upper', name: 'جدار علوي' };
-process.stdout.write(exportIfc([wall, upperWall], 'مشروع الاختبار', levels));
+const slab = { type:'slab', id:'22334455-6677-4899-aabb-ccddeeff0013', name:'بلاطة الدور الأول',
+  levelId:'upper', x:1, y:2, w:4, h:5, z:0.2, layer:'S-SLAB' };
+process.stdout.write(exportIfc([wall, upperWall, slab], 'مشروع الاختبار', levels));
