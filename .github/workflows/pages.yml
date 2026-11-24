@@ -25,7 +25,7 @@ jobs:
       - name: Stage public files
         run: |
           mkdir -p dist
-          cp index.html styles.css app.js engine.js dist/
+          cp index.html styles.css app.js engine.js ifc.js dist/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
