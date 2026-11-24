@@ -45,3 +45,12 @@ test('touching end faces and disjoint footprints add no overlap', () => {
   near(result.netVolume, 7.2);
   near(result.overlap, 0);
 });
+
+test('stacked footprints only overlap when wall heights cross the floor elevation', () => {
+  const ground = { id: 'ground', name: 'Ground', elevation: 0 };
+  const upper = { id: 'upper', name: 'Upper', elevation: 3.25 };
+  const baseWall = wall(0, 0, 4, 0);
+  const upperWall = { ...baseWall, levelId: 'upper' };
+  near(wallVolumeSummary([baseWall, upperWall], [ground, upper]).netVolume, 4.8);
+  near(wallVolumeSummary([baseWall, upperWall], [ground, { ...upper, elevation: 2.5 }]).overlap, 0.4);
+});

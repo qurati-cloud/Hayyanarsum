@@ -1,4 +1,4 @@
-import { length, valid, wallQuantities } from './engine.js';
+import { elementLevel, length, valid, validateLevels, wallQuantities } from './engine.js';
 
 const ifcAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 const missing = '$';
@@ -40,9 +40,10 @@ const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 export const isIfcWall = shape => shape?.type === 'wall' && shape.thickness != null && valid(shape);
 
-export function exportIfc(shapes, projectName = 'Hayyanarsum') {
+export function exportIfc(shapes, projectName = 'Hayyanarsum', levels) {
   const walls = shapes.filter(isIfcWall);
   if (!walls.length) throw new TypeError('No modeled walls to export');
+  const storeys = validateLevels(levels);
   const data = [];
   const entity = (type, ...args) => {
     const ref = '#' + (data.length + 1);
@@ -76,11 +77,14 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum') {
   const buildingPlacement = local(sitePlacement, 0, 0, 0);
   const building = entity('IFCBUILDING', ...root('Building'), missing, buildingPlacement, missing, missing, mode,
     missing, missing, missing);
-  const storeyPlacement = local(buildingPlacement, 0, 0, 0);
-  const storey = entity('IFCBUILDINGSTOREY', ...root('Ground floor'), missing, storeyPlacement, missing, missing, mode, '0.');
-  for (const [parent, child] of [[project, site], [site, building], [building, storey]]) {
-    entity('IFCRELAGGREGATES', ...root(''), parent, tuple([child]));
-  }
+  const spatial = new Map(storeys.map(level => {
+    const placement = local(buildingPlacement, 0, 0, level.elevation);
+    const ref = entity('IFCBUILDINGSTOREY', ...root(level.name), missing, placement, missing, missing, mode, real(level.elevation));
+    return [level.id, { ref, placement, contained: [] }];
+  }));
+  entity('IFCRELAGGREGATES', ...root(''), project, tuple([site]));
+  entity('IFCRELAGGREGATES', ...root(''), site, tuple([building]));
+  entity('IFCRELAGGREGATES', ...root(''), building, tuple([...spatial.values()].map(level => level.ref)));
 
   function box(width, thickness, height) {
     const profile = entity('IFCRECTANGLEPROFILEDEF', '.AREA.', missing, missing, real(width), real(thickness));
@@ -99,16 +103,18 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum') {
     entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([reference]), set);
   }
 
-  const contained = [];
   for (const wall of walls) {
+    const level = elementLevel(wall, storeys);
+    const storey = spatial.get(level?.id);
+    if (!storey) throw new TypeError('Wall refers to an unknown storey');
     const width = length(wall);
     // Map the screen's downward Y into IFC's upward Y, preserving the start and orientation.
     const axis = direction([(wall.x2 - wall.x) / width, (wall.y - wall.y2) / width, 0]);
-    const pose = local(storeyPlacement, wall.x, -wall.y, 0, axis);
+    const pose = local(storey.placement, wall.x, -wall.y, 0, axis);
     const stableId = uuidPattern.test(wall.id) ? wall.id : undefined;
     const wallRef = entity('IFCWALL', ...root(wall.name || 'Wall', stableId), missing, pose,
       box(width, wall.thickness, wall.z), stepString(wall.id || ''), '.NOTDEFINED.');
-    contained.push(wallRef);
+    storey.contained.push(wallRef);
     quantities(wall, wallRef, width);
     for (const opening of wall.openings) {
       const isDoor = opening.kind === 'door';
@@ -122,10 +128,12 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum') {
       const fill = entity(isDoor ? 'IFCDOOR' : 'IFCWINDOW', ...root(label), missing, fillPose,
         missing, missing, real(opening.height), real(opening.width), isDoor ? '.DOOR.' : '.WINDOW.', '.NOTDEFINED.', missing);
       entity('IFCRELFILLSELEMENT', ...root(''), voidRef, fill);
-      contained.push(fill);
+      storey.contained.push(fill);
     }
   }
-  entity('IFCRELCONTAINEDINSPATIALSTRUCTURE', ...root(''), tuple(contained), storey);
+  for (const { ref, contained } of spatial.values()) {
+    if (contained.length) entity('IFCRELCONTAINEDINSPATIALSTRUCTURE', ...root(''), tuple(contained), ref);
+  }
   return [
     'ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('Hayyanarsum wall model'),'2;1');",
     "FILE_NAME('hayyanarsum.ifc'," + stepString(new Date().toISOString()) + ",(''),(''),'Hayyanarsum','Hayyanarsum','');",

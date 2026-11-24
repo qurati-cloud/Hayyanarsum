@@ -1,4 +1,4 @@
-import { valid, wallParts, wallQuantities } from './engine.js';
+import { elementLevel, groundLevel, valid, wallParts, wallQuantities } from './engine.js';
 
 const maxWork = 3_000_000;
 
@@ -53,11 +53,14 @@ function footprintUnion(polygons, spend) {
   return area;
 }
 
-export function wallVolumeSummary(shapes) {
-  const walls = shapes.filter(shape => shape.type === 'wall' && shape.thickness != null && valid(shape));
+export function wallVolumeSummary(shapes, storeys = [groundLevel]) {
+  const walls = shapes.filter(shape => shape.type === 'wall' && shape.thickness != null && valid(shape) && elementLevel(shape, storeys));
   const omitted = shapes.filter(shape => shape.type === 'wall').length - walls.length;
   const separateVolume = walls.reduce((volume, wall) => volume + wallQuantities(wall).netVolume, 0);
-  const parts = walls.flatMap(wallParts);
+  const parts = walls.flatMap(wall => {
+    const { elevation } = elementLevel(wall, storeys);
+    return wallParts(wall).map(part => ({ ...part, bottom: part.bottom + elevation, top: part.top + elevation }));
+  });
   const levels = [...new Set(parts.flatMap(part => [part.bottom, part.top]))].sort((a, b) => a - b);
   let work = 0;
   const limit = Symbol('volume computation limit');

@@ -25,8 +25,14 @@ def validate_export():
     assert ifcopenshell.util.unit.calculate_unit_scale(model) == 1
     assert model.by_type("IfcProject")[0].Name == "مشروع الاختبار"
 
-    wall, = model.by_type("IfcWall")
-    assert wall.Name == "جدار 'أ' \\ اختبار"
+    lower, wall = model.by_type("IfcWall")
+    levels = {level.Name: level.Elevation for level in model.by_type("IfcBuildingStorey")}
+    assert levels == {"الطابق الأرضي": 0, "الطابق الأول": 3.25}
+    assert lower.ContainedInStructure[0].RelatingStructure.Elevation == 0
+    assert wall.ContainedInStructure[0].RelatingStructure.Elevation == 3.25
+    assert ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)[2, 3] == 3.25
+    assert lower.Name == "جدار 'أ' \\ اختبار"
+    assert wall.Name == "جدار علوي"
     assert len(wall.HasOpenings) == 2
     wall_solid = wall.Representation.Representations[0].Items[0]
     assert (wall_solid.SweptArea.XDim, wall_solid.SweptArea.YDim, wall_solid.Depth) == (5, 0.2, 3)
@@ -39,10 +45,10 @@ def validate_export():
         pose = ifcopenshell.util.placement.get_local_placement(filling.ObjectPlacement)
         assert math.isclose(pose[0, 3], 1 + 0.6 * offset)
         assert math.isclose(pose[1, 3], -2 - 0.8 * offset)
-        assert math.isclose(pose[2, 3], sill)
+        assert math.isclose(pose[2, 3], 3.25 + sill)
         assert (filling.OverallWidth, filling.OverallHeight) == (1, height)
         assert not opening.ContainedInStructure
-        assert filling.ContainedInStructure[0].RelatingStructure.is_a("IfcBuildingStorey")
+        assert filling.ContainedInStructure[0].RelatingStructure == wall.ContainedInStructure[0].RelatingStructure
     assert not expected
 
     geometry = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), wall).geometry

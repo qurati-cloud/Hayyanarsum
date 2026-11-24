@@ -3,6 +3,28 @@ export const area = shape => shape.type === 'room' ? shape.w * shape.h : 0;
 export const length = shape => shape.type === 'wall' ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
 export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
 
+export const groundLevel = Object.freeze({ id: 'ground', name: 'الطابق الأرضي', elevation: 0 });
+
+export function validateLevels(levels = [groundLevel]) {
+  if (!Array.isArray(levels) || !levels.length || levels.length > 100) {
+    throw new TypeError('Invalid storey list');
+  }
+  const identifiers = new Set();
+  return levels.map(level => {
+    if (!level || typeof level.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(level.id) ||
+      identifiers.has(level.id) || typeof level.name !== 'string' || !level.name.trim() ||
+      !Number.isFinite(level.elevation) || Math.abs(level.elevation) > 1e6) {
+      throw new TypeError('Invalid storey');
+    }
+    identifiers.add(level.id);
+    return { id: level.id, name: level.name.trim().slice(0, 160), elevation: level.elevation };
+  });
+}
+
+export function elementLevel(shape, levels) {
+  return levels.find(level => level.id === (shape.levelId ?? 'ground')) ?? (shape.levelId == null ? levels[0] : undefined);
+}
+
 export function validHeight(height) {
   return Number.isFinite(height) && height >= 0.01 && height <= 1000;
 }
@@ -78,7 +100,7 @@ export function wallQuantities(wall) {
   return { grossArea, openingArea, netArea, netVolume: netArea * wall.thickness };
 }
 
-export function roomProjection(shapes, degrees) {
+export function roomProjection(shapes, degrees, levels = [groundLevel]) {
   const angle = degrees * Math.PI / 180;
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
@@ -104,12 +126,13 @@ export function roomProjection(shapes, degrees) {
     add(top, 'top');
   }
   for (const shape of shapes) {
-    if (!validHeight(shape.z)) continue;
+    const level = elementLevel(shape, levels);
+    if (!level || !validHeight(shape.z)) continue;
     if (shape.type === 'wall') {
-      for (const part of wallParts(shape)) addPrism(shape, part.base, part.bottom, part.top);
+      for (const part of wallParts(shape)) addPrism(shape, part.base, part.bottom + level.elevation, part.top + level.elevation);
     } else {
       const { x, y, w, h, z } = shape;
-      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], 0, z);
+      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], level.elevation, z + level.elevation);
     }
   }
   return faces.sort((left, right) => left.depth - right.depth);
