@@ -1,7 +1,83 @@
-export const snap=(n,s=.5)=>Math.round(n/s)*s;
-export const area=s=>s.type==='room'?s.w*s.h:0;
-export const length=s=>s.type==='wall'?Math.hypot(s.x2-s.x,s.y2-s.y):0;
-export const totalArea=a=>a.reduce((n,s)=>n+area(s),0);
-export const valid=s=>s&&['room','wall'].includes(s.type)&&(s.type==='room'?[s.x,s.y,s.w,s.h]:[s.x,s.y,s.x2,s.y2]).every(Number.isFinite)&&(s.type!=='room'||s.w>0&&s.h>0);
-export function compliance(i){if(i.buildingType!=='apartment')return[{status:'na',title:'نطاق القواعد',message:'لا توجد قواعد مفعلة وموثقة لهذا النوع حاليًا.',source:'—'}];const r=[],ratio=(a,b)=>b>0?a/b*100:Infinity,add=(title,a,limit,n)=>r.push({title,status:a<=limit?'pass':'fail',message:`القيمة ${a.toFixed(2)}% — الحد ${limit}%`,source:`اشتراطات إنشاء المباني السكنية، 4-2، بند ${n}`});add('نسبة بناء الدور الأرضي',ratio(i.groundArea,i.landArea),65,1);add('نسبة بناء الدور المتكرر',ratio(i.upperArea,i.landArea),75,2);add('نسبة بناء الملحق العلوي',ratio(i.roofArea,i.roofBaseArea),70,3);const f=Math.max(i.streetWidth/5,3),s=Math.max(i.streetWidth/5,2);r.push({title:'الارتداد الأمامي',status:i.frontSetback>=f?'pass':'fail',message:`المتوفر ${i.frontSetback} م — المطلوب ${f.toFixed(2)} م`,source:'4-2، بند 4'},{title:'الارتداد الجانبي والخلفي',status:i.sideSetback>=s?'pass':'fail',message:`المتوفر ${i.sideSetback} م — المطلوب ${s.toFixed(2)} م`,source:'4-2، بند 4'});const a=Math.ceil(i.unitsCount*1.5),b=i.retailArea>0?Math.max(1,Math.ceil(i.retailArea/45)):0;r.push({title:'مواقف السيارات',status:i.parkingSpaces>=a+b?'pass':'fail',message:`المتوفر ${i.parkingSpaces} — المطلوب ${a+b}`,source:'4-2، البندان 5 و6'});return r}
-export function dxf(a){const o=['0','SECTION','2','HEADER','9','$INSUNITS','70','6','0','ENDSEC','0','SECTION','2','ENTITIES'],line=(x,y,x2,y2,l)=>o.push('0','LINE','8',l||'0','10',x,'20',y,'30','0','11',x2,'21',y2,'31','0');for(const s of a)s.type==='room'?(line(s.x,s.y,s.x+s.w,s.y,s.layer),line(s.x+s.w,s.y,s.x+s.w,s.y+s.h,s.layer),line(s.x+s.w,s.y+s.h,s.x,s.y+s.h,s.layer),line(s.x,s.y+s.h,s.x,s.y,s.layer)):line(s.x,s.y,s.x2,s.y2,s.layer);return[...o,'0','ENDSEC','0','EOF'].join('\n')+'\n'}
+export const snap = (value, step = 0.5) => Math.round(value / step) * step;
+export const area = shape => shape.type === 'room' ? shape.w * shape.h : 0;
+export const length = shape => shape.type === 'wall' ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
+export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
+
+export function valid(shape) {
+  if (!shape || !['room', 'wall'].includes(shape.type)) return false;
+  const values = shape.type === 'room'
+    ? [shape.x, shape.y, shape.w, shape.h, shape.x + shape.w, shape.y + shape.h, area(shape)]
+    : [shape.x, shape.y, shape.x2, shape.y2, length(shape)];
+  return values.every(Number.isFinite) &&
+    (shape.type === 'room' ? shape.w > 0 && shape.h > 0 : length(shape) > 0);
+}
+
+export const residentialReference = Object.freeze({
+  authority: 'وزارة البلديات والإسكان',
+  title: 'اشتراطات إنشاء المباني السكنية',
+  url: 'https://balady.gov.sa/sites/default/files/2024-12/ashtratat%20a%27nsha%20almbany%20alsknyt%20almnshwrt%20%60ly%20mwq%60%20alwzart%20.pdf',
+  section: '4-2',
+  edition: null,
+  effectiveDate: null,
+  jurisdiction: 'السعودية، مع مراجعة الضوابط المحلية للموقع',
+  status: 'draft',
+});
+
+export function compliance(input) {
+  if (input.buildingType !== 'apartment') {
+    return [{ status: 'na', title: 'نطاق القواعد', message: 'هذه المقارنة تخص العمائر السكنية والسكنية التجارية.', source: '—' }];
+  }
+  const ratios = [
+    ['نسبة بناء الدور الأرضي', input.groundArea, input.landArea, 65],
+    ['نسبة بناء الدور الأول أو المتكرر المدخل', input.upperArea, input.landArea, 75],
+    ['نسبة بناء الملحق العلوي', input.roofArea, input.roofBaseArea, 70],
+  ];
+  const results = ratios.map(([title, numerator, denominator, limit], index) => {
+    const ratio = numerator / denominator * 100;
+    const complete = numerator >= 0 && denominator > 0 && Number.isFinite(ratio);
+    return {
+      title,
+      status: 'draft',
+      message: complete
+        ? `النسبة المحسوبة ${ratio.toFixed(2)}%، والقيمة المرجعية ${limit}%. ${ratio > limit ? 'تتجاوز القيمة المرجعية.' : 'ضمن القيمة المرجعية.'} تطبيق الشرط على الموقع وتاريخ نفاذه قيد المراجعة.`
+        : 'أدخل مساحة غير سالبة ومقامًا موجبًا للمقارنة.',
+      source: `${residentialReference.title}، ${residentialReference.section}، بند ${index + 1}`,
+      url: residentialReference.url,
+    };
+  });
+  results.push({
+    title: 'الارتدادات ومواقف السيارات',
+    status: 'draft',
+    message: 'الفحص معلق. تحتاج الارتدادات إلى بيانات مستقلة لكل واجهة وحد مجاور، ومواقف المحلات إلى عدد المحلات ومساحاتها.',
+    source: 'اشتراطات إنشاء المباني السكنية، 4-2، البنود 4–6',
+    url: residentialReference.url,
+  });
+  return results;
+}
+
+export function dxf(shapes) {
+  const records = [
+    '0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1015',
+    '9', '$INSUNITS', '70', '6', '9', '$MEASUREMENT', '70', '1',
+    '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES',
+  ];
+  // The screen has a downwards Y axis; CAD uses an upwards Y axis.
+  function line(x, y, x2, y2, layer) {
+    records.push('0', 'LINE', '100', 'AcDbEntity', '8', layer,
+      '100', 'AcDbLine', '10', x, '20', -y, '30', 0, '11', x2, '21', -y2, '31', 0);
+  }
+  for (const shape of shapes) {
+    if (!valid(shape)) throw new TypeError('Invalid geometry');
+    const layer = /^[A-Z0-9_-]{1,40}$/.test(shape.layer) ? shape.layer : '0';
+    const { x, y, w, h } = shape;
+    if (shape.type === 'wall') {
+      line(x, y, shape.x2, shape.y2, layer);
+      continue;
+    }
+    line(x, y, x + w, y, layer);
+    line(x + w, y, x + w, y + h, layer);
+    line(x + w, y + h, x, y + h, layer);
+    line(x, y + h, x, y, layer);
+  }
+  return [...records, '0', 'ENDSEC', '0', 'EOF', ''].join('\r\n');
+}
