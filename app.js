@@ -1,11 +1,13 @@
-import{snap,area,length,totalArea,valid,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{snap,area,length,totalArea,valid,validHeight,roomProjection,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type==='room'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type==='room'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type==='room'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
-function render(){const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of S.shapes){const e=s.type==='room'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=S.shapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${s.type==='room'?area(s).toFixed(2)+' م²':length(s).toFixed(2)+' م'}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${S.shapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type === 'room'); boq()}
+function render(){const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of S.shapes){const e=s.type==='room'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=S.shapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${s.type==='room'?area(s).toFixed(2)+' م²':length(s).toFixed(2)+' م'}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${S.shapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type === 'room'); boq(); render3d()}
 function boq(){$('boq').innerHTML=S.shapes.map(s=>{const q=s.type==='room'?area(s):length(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(s.name)}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='room'?'م²':'م ط'}</td><td><input class="rate" data-id="${s.id}" type="number" min="0" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=S.shapes.reduce((n,s)=>n+(s.type==='room'?area(s):length(s))*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
 function addRoom(x = 2, y = 2, w = Number($('shapeW').value), h = Number($('shapeH').value), name = $('shapeName').value) {
+  const heightInput = $('roomZ').value;
+  const z = heightInput === '' ? null : Number(heightInput);
   const shape = { id: crypto.randomUUID(), type: 'room', name: name.slice(0, 160) || 'مساحة',
-    x, y, w, h, layer: $('layer').value };
+    x, y, w, h, z, layer: $('layer').value };
   if (!valid(shape)) {
     $('mode').textContent = 'أدخل أبعادًا موجبة وصالحة.';
     return false;
@@ -28,6 +30,7 @@ function selectShape(id) {
     if (shape.type === 'room') {
       $('shapeW').value = shape.w;
       $('shapeH').value = shape.h;
+      $('roomZ').value = shape.z ?? '';
     }
   }
   render();
@@ -36,7 +39,8 @@ $('editRoom').onclick = () => {
   const current = S.shapes.find(shape => shape.id === S.selected && shape.type === 'room');
   if (!current) return;
   const updated = { ...current, name: $('shapeName').value.slice(0, 160) || 'مساحة',
-    w: Number($('shapeW').value), h: Number($('shapeH').value), layer: $('layer').value };
+    w: Number($('shapeW').value), h: Number($('shapeH').value),
+    z: $('roomZ').value === '' ? null : Number($('roomZ').value), layer: $('layer').value };
   if (!valid(updated)) {
     $('mode').textContent = 'أدخل أبعادًا موجبة وصالحة.';
     return;
@@ -115,8 +119,8 @@ function readProject(data) {
       throw new TypeError('Invalid project element');
     }
     identifiers.add(shape.id);
-    const { id, type, name, layer, x, y, w, h, x2, y2 } = shape;
-    return type === 'room' ? { id, type, name: name.slice(0, 160), layer, x, y, w, h }
+    const { id, type, name, layer, x, y, w, h, z, x2, y2 } = shape;
+    return type === 'room' ? { id, type, name: name.slice(0, 160), layer, x, y, w, h, z }
       : { id, type, name: name.slice(0, 160), layer, x, y, x2, y2 };
   });
   const project = {};
@@ -142,6 +146,42 @@ try {
 } catch {
   $('mode').textContent = 'تعذّرت قراءة النسخة المحلية المحفوظة.';
 }
+function render3d() {
+  if ($('preview3d').hidden) return;
+  const canvas = $('model3d');
+  canvas.replaceChildren();
+  const faces = roomProjection(S.shapes, Number($('azimuth').value));
+  const count = S.shapes.filter(shape => shape.type === 'room' && validHeight(shape.z)).length;
+  $('modelNote').textContent = count
+    ? 'المجسّمات المعروضة: ' + count + '. تظهر المساحات التي لها ارتفاع مدخل.'
+    : 'حدّد مساحة وأدخل ارتفاعها ثم اضغط «تحديث المساحة المحددة».';
+  if (!faces.length) return;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const face of faces) for (const point of face.points) {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  }
+  const scale = Math.min(656 / (maxX - minX), 316 / (maxY - minY));
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  for (const face of faces) {
+    const points = face.points.map(point =>
+      [360 + (point.x - centerX) * scale, 190 + (point.y - centerY) * scale].join(',')).join(' ');
+    const color = C[face.layer];
+    canvas.append(el('polygon', { points, fill: color, 'fill-opacity': face.kind === 'top' ? .72 : .92,
+      stroke: face.id === S.selected ? '#d2ab63' : '#233c32', 'stroke-width': face.id === S.selected ? 2 : 1 }));
+  }
+}
+$('toggle3d').onclick = () => {
+  const panel = $('preview3d');
+  panel.hidden = !panel.hidden;
+  $('toggle3d').setAttribute('aria-expanded', String(!panel.hidden));
+  $('toggle3d').textContent = panel.hidden ? 'معاينة 3D' : 'إخفاء معاينة 3D';
+  render3d();
+};
+$('azimuth').oninput = render3d;
 loadProjectFields();
 render();
 runChecks();

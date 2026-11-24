@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { snap, totalArea, length, compliance, dxf, valid } from '../engine.js';
+import { snap, totalArea, length, compliance, dxf, valid, roomProjection } from '../engine.js';
 
 const room = { type: 'room', x: 2, y: 3, w: 4.25, h: 5.125, layer: 'A-WALL' };
+test('3D projection uses explicit room heights and rotates the footprint', () => {
+  assert.deepEqual(roomProjection([room], 35), []);
+  const prism = { ...room, z: 2.8 };
+  const faces = roomProjection([prism], 35);
+  assert.equal(faces.length, 3);
+  assert.equal(faces.filter(face => face.kind === 'top').length, 1);
+  assert.notDeepEqual(roomProjection([prism], 215), faces);
+  assert.notDeepEqual(roomProjection([{ ...prism, z: 3.2 }], 35), faces);
+  assert.equal(valid({ ...room, z: -1 }), false);
+});
 test('pointer grid and entered geometry use separate precision', () => {
   assert.equal(snap(3.26), 3.5);
   assert.equal(totalArea([room]), 21.78125);
