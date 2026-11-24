@@ -1,7 +1,7 @@
-import{snap,area,length,totalArea,valid,validHeight,roomProjection,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{snap,area,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type==='room'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type==='room'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type==='room'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
-function render(){const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of S.shapes){const e=s.type==='room'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=S.shapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${s.type==='room'?area(s).toFixed(2)+' م²':length(s).toFixed(2)+' م'}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${S.shapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type === 'room'); boq(); render3d()}
+function render(){const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of S.shapes){if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=s.type==='room'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=S.shapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${s.type==='room'?area(s).toFixed(2)+' م²':length(s).toFixed(2)+' م'}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${S.shapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type === 'room'); boq(); render3d(); renderWallEditor()}
 function boq(){$('boq').innerHTML=S.shapes.map(s=>{const q=s.type==='room'?area(s):length(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(s.name)}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='room'?'م²':'م ط'}</td><td><input class="rate" data-id="${s.id}" type="number" min="0" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=S.shapes.reduce((n,s)=>n+(s.type==='room'?area(s):length(s))*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
 function addRoom(x = 2, y = 2, w = Number($('shapeW').value), h = Number($('shapeH').value), name = $('shapeName').value) {
   const heightInput = $('roomZ').value;
@@ -19,7 +19,7 @@ function addRoom(x = 2, y = 2, w = Number($('shapeW').value), h = Number($('shap
   return true;
 }
 function pt(e){const r=$('svg').getBoundingClientRect();return{x:snap((e.clientX-r.left)*1200/r.width/PX),y:snap((e.clientY-r.top)*700/r.height/PX)}}
-$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else start=pt(e)};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(S.tool==='room'?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(S.tool==='room'&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();S.shapes.push({id:crypto.randomUUID(),type:'wall',name:$('shapeName').value||'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value});render()}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
+$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else start=pt(e)};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(S.tool==='room'?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(S.tool==='room'&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
 document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view))}};
 function selectShape(id) {
   S.selected = id;
@@ -35,6 +35,106 @@ function selectShape(id) {
   }
   render();
 }
+const wallFields = { x: 'wallX', y: 'wallY', x2: 'wallX2', y2: 'wallY2', thickness: 'wallT', z: 'wallZ' };
+const openingFields = { offset: 'openingOffset', width: 'openingWidth', sill: 'openingSill', height: 'openingHeight' };
+const numberField = id => $(id).value === '' ? NaN : Number($(id).value);
+const selectedWall = () => S.shapes.find(shape => shape.id === S.selected && shape.type === 'wall');
+const openingLabel = kind => kind === 'door' ? 'باب' : 'نافذة';
+
+function drawWall(group, wall) {
+  for (const { start, end, opening } of wallSpans(wall)) {
+    const points = wallFootprint(wall, start, end).map(point => point.map(value => value * PX).join(',')).join(' ');
+    const polygon = el('polygon', { points, class: 'shape' + (wall.id === S.selected ? ' selected' : ''),
+      stroke: C[wall.layer], fill: opening ? '#fff' : C[wall.layer],
+      'stroke-dasharray': opening ? (opening.kind === 'door' ? '3 2' : '8 2') : 'none' });
+    polygon.dataset.id = wall.id;
+    if (opening) {
+      const title = el('title');
+      title.textContent = openingLabel(opening.kind) + ' · ' + opening.width + ' م';
+      polygon.append(title);
+    }
+    group.append(polygon);
+  }
+}
+
+function loadOpeningFields() {
+  const opening = selectedWall()?.openings?.[$('openingIndex').value];
+  $('openingKind').value = opening?.kind ?? 'door';
+  for (const [key, id] of Object.entries(openingFields)) $(id).value = opening?.[key] ?? '';
+  $('openingRemove').disabled = !opening;
+  configureOpeningSill();
+}
+
+function configureOpeningSill() {
+  const isDoor = $('openingKind').value === 'door';
+  $('openingSill').disabled = isDoor;
+  if (isDoor) $('openingSill').value = 0;
+}
+
+function renderWallEditor() {
+  const wall = selectedWall();
+  $('wallEditor').hidden = !wall;
+  if (wall) {
+    for (const [key, id] of Object.entries(wallFields)) $(id).value = wall[key] ?? '';
+    $('openingPanel').hidden = wall.thickness == null;
+    $('openingIndex').replaceChildren(new Option('فتحة جديدة', ''));
+    wall.openings?.forEach((opening, index) => {
+      $('openingIndex').add(new Option(openingLabel(opening.kind) + ' · ' + opening.offset + ' م', index));
+    });
+    loadOpeningFields();
+  }
+  const modeledWalls = S.shapes.filter(shape => shape.type === 'wall' && shape.thickness != null);
+  $('wallReport').hidden = modeledWalls.length === 0;
+  $('wallBoq').replaceChildren();
+  for (const wall of modeledWalls) {
+    const { openingArea, netArea, netVolume } = wallQuantities(wall);
+    const row = $('wallBoq').insertRow();
+    for (const value of [wall.name, openingArea.toFixed(3), netArea.toFixed(3), netVolume.toFixed(3)]) {
+      row.insertCell().textContent = value;
+    }
+  }
+}
+
+function saveWall(wall, message) {
+  if (!valid(wall)) {
+    $('wallStatus').textContent = 'تحقق من الأبعاد. ينبغي أن تقع الفتحات بالكامل ضمن الجدار وألا تتداخل أفقيًا.';
+    return false;
+  }
+  commit();
+  S.shapes = S.shapes.map(shape => shape.id === wall.id ? wall : shape);
+  render();
+  $('wallStatus').textContent = message;
+  return true;
+}
+
+$('wallApply').onclick = () => {
+  const wall = selectedWall();
+  if (!wall) return;
+  const values = Object.fromEntries(Object.entries(wallFields).map(([key, id]) => [key, numberField(id)]));
+  saveWall({ ...wall, ...values, name: $('shapeName').value.trim().slice(0, 160) || 'جدار',
+    layer: $('layer').value, openings: wall.openings ?? [] }, 'حُدّث الجدار.');
+};
+$('openingIndex').onchange = loadOpeningFields;
+$('openingKind').onchange = configureOpeningSill;
+$('openingApply').onclick = () => {
+  const wall = selectedWall();
+  if (!wall?.openings) return;
+  const value = $('openingIndex').value;
+  const openings = [...wall.openings];
+  const index = value === '' ? openings.length : Number(value);
+  const values = Object.fromEntries(Object.entries(openingFields).map(([key, id]) => [key, numberField(id)]));
+  openings[index] = { ...values, kind: $('openingKind').value };
+  if (saveWall({ ...wall, openings }, 'حُفظت الفتحة.')) {
+    $('openingIndex').value = String(index);
+    loadOpeningFields();
+  }
+};
+$('openingRemove').onclick = () => {
+  const wall = selectedWall();
+  const index = $('openingIndex').value;
+  if (!wall?.openings || index === '') return;
+  saveWall({ ...wall, openings: wall.openings.filter((_, item) => item !== Number(index)) }, 'حُذفت الفتحة.');
+};
 $('editRoom').onclick = () => {
   const current = S.shapes.find(shape => shape.id === S.selected && shape.type === 'room');
   if (!current) return;
@@ -63,6 +163,12 @@ $('csv').onclick = () => {
     const quantity = shape.type === 'room' ? area(shape) : length(shape);
     const rate = S.prices[shape.id] ?? 0;
     rows.push([shape.name,shape.layer,quantity,shape.type === 'room' ? 'م²' : 'م',rate,quantity * rate]);
+    if (shape.type === 'wall' && shape.thickness != null) {
+      const { openingArea, netArea, netVolume } = wallQuantities(shape);
+      rows.push([shape.name + ' · مساحة الفتحات', shape.layer, openingArea, 'م²', '', ''],
+        [shape.name + ' · صافي المساحة', shape.layer, netArea, 'م²', '', ''],
+        [shape.name + ' · صافي الحجم', shape.layer, netVolume, 'م³', '', '']);
+    }
   }
   dl('hayyanarsum-boq.csv','\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');
 };
@@ -119,9 +225,10 @@ function readProject(data) {
       throw new TypeError('Invalid project element');
     }
     identifiers.add(shape.id);
-    const { id, type, name, layer, x, y, w, h, z, x2, y2 } = shape;
+    const { id, type, name, layer, x, y, w, h, z, x2, y2, thickness, openings } = shape;
     return type === 'room' ? { id, type, name: name.slice(0, 160), layer, x, y, w, h, z }
-      : { id, type, name: name.slice(0, 160), layer, x, y, x2, y2 };
+      : { id, type, name: name.slice(0, 160), layer, x, y, x2, y2, z, thickness,
+          openings: openings?.map(({ kind, offset, width, sill, height }) => ({ kind, offset, width, sill, height })) };
   });
   const project = {};
   for (const key of ['name','city','revision','description']) {
@@ -150,11 +257,13 @@ function render3d() {
   if ($('preview3d').hidden) return;
   const canvas = $('model3d');
   canvas.replaceChildren();
-  const faces = roomProjection(S.shapes, Number($('azimuth').value));
-  const count = S.shapes.filter(shape => shape.type === 'room' && validHeight(shape.z)).length;
-  $('modelNote').textContent = count
-    ? 'المجسّمات المعروضة: ' + count + '. تظهر المساحات التي لها ارتفاع مدخل.'
-    : 'حدّد مساحة وأدخل ارتفاعها ثم اضغط «تحديث المساحة المحددة».';
+  const walls = S.shapes.filter(shape => shape.type === 'wall' && validHeight(shape.z));
+  const shaped = walls.length ? walls : S.shapes.filter(shape => shape.type === 'room' && validHeight(shape.z));
+  const faces = roomProjection(shaped, Number($('azimuth').value));
+  $('modelNote').textContent = walls.length
+    ? 'الجدران المعروضة: ' + walls.length + '. تعرض المعاينة الجدران المعرّفة وفتحاتها.'
+    : shaped.length ? 'المساحات المجسّمة: ' + shaped.length
+      : 'أدخل ارتفاع المساحة أو حدّد جدارًا وأدخل سماكته وارتفاعه.';
   if (!faces.length) return;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const face of faces) for (const point of face.points) {

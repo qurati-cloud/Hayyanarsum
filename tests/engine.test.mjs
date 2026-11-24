@@ -1,6 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { snap, totalArea, length, compliance, dxf, valid, roomProjection } from '../engine.js';
+import { snap, totalArea, length, compliance, dxf, valid, roomProjection, wallParts, wallQuantities } from '../engine.js';
+
+const wall = {
+  type: 'wall', x: 0, y: 0, x2: 3, y2: 4, z: 3, thickness: 0.2, layer: 'A-WALL',
+  openings: [{ kind: 'door', offset: 1, width: 1, sill: 0, height: 2 },
+    { kind: 'window', offset: 3, width: 1, sill: 1, height: 1 }],
+};
+
+test('rotated wall subtracts door and window from area and volume', () => {
+  assert.equal(valid(wall), true);
+  assert.equal(length(wall), 5);
+  const { grossArea, openingArea, netArea, netVolume } = wallQuantities(wall);
+  assert.deepEqual([grossArea, openingArea, netArea], [15, 3, 12]);
+  assert.ok(Math.abs(netVolume - 2.4) < 1e-9);
+  const parts = wallParts(wall);
+  const volume = parts.reduce((sum, part) => {
+    const [first, second, third] = part.base;
+    const width = Math.hypot(second[0] - first[0], second[1] - first[1]);
+    const thickness = Math.hypot(third[0] - second[0], third[1] - second[1]);
+    return sum + width * thickness * (part.top - part.bottom);
+  }, 0);
+  assert.ok(Math.abs(volume - netVolume) < 1e-9);
+  assert.match(dxf([wall]), /A-DOOR/);
+  assert.match(dxf([wall]), /A-GLAZ/);
+  assert.ok(roomProjection([wall], 35).length > 3);
+});
+
+test('rejects out of bounds, overlapping, and raised door openings', () => {
+  const [door, window] = wall.openings;
+  for (const invalid of [{ ...window, offset: 4.1 }, { ...window, offset: 1.9 }, { ...window, sill: 2.1 }]) {
+    assert.equal(valid({ ...wall, openings: [door, invalid] }), false);
+  }
+  assert.equal(valid({ ...wall, openings: [{ ...door, sill: 0.1 }] }), false);
+  assert.equal(valid({ ...wall, z: undefined, thickness: undefined, openings: undefined }), true);
+});
 
 const room = { type: 'room', x: 2, y: 3, w: 4.25, h: 5.125, layer: 'A-WALL' };
 test('3D projection uses explicit room heights and rotates the footprint', () => {

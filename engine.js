@@ -7,6 +7,77 @@ export function validHeight(height) {
   return Number.isFinite(height) && height >= 0.01 && height <= 1000;
 }
 
+const tolerance = 1e-9;
+
+export function validWallDetails(wall) {
+  const { z, thickness, openings } = wall;
+  if (z == null && thickness == null && openings == null) return true;
+  if (!validHeight(z) || !validHeight(thickness) || !Array.isArray(openings) || openings.length > 50) return false;
+  const wallLength = length(wall);
+  const sortedOpenings = [...openings];
+  for (const opening of sortedOpenings) {
+    if (!opening || !['door', 'window'].includes(opening.kind)) return false;
+    const { offset, width, sill, height, kind } = opening;
+    if (!Number.isFinite(offset) || offset < 0 || !validHeight(width) || !validHeight(height) ||
+      !Number.isFinite(sill) || sill < 0 || (kind === 'door' && sill !== 0) ||
+      offset + width > wallLength + tolerance || sill + height > z + tolerance) return false;
+  }
+  sortedOpenings.sort((left, right) => left.offset - right.offset);
+  return sortedOpenings.every((opening, index) => {
+    const previous = sortedOpenings[index - 1];
+    return !previous || previous.offset + previous.width <= opening.offset + tolerance;
+  });
+}
+
+export function wallFootprint(wall, start, end) {
+  const fullLength = length(wall);
+  const dx = (wall.x2 - wall.x) / fullLength;
+  const dy = (wall.y2 - wall.y) / fullLength;
+  const half = wall.thickness / 2;
+  const point = (distance, side) => [
+    wall.x + distance * dx - side * half * dy,
+    wall.y + distance * dy + side * half * dx,
+  ];
+  return [point(start, -1), point(end, -1), point(end, 1), point(start, 1)];
+}
+
+export function wallSpans(wall) {
+  const endOfWall = length(wall);
+  let lastEnd = 0;
+  const spans = [];
+  for (const opening of [...wall.openings].sort((left, right) => left.offset - right.offset)) {
+    const start = Math.max(lastEnd, opening.offset);
+    const end = Math.min(endOfWall, opening.offset + opening.width);
+    if (start > lastEnd) spans.push({ start: lastEnd, end: start });
+    spans.push({ start, end, opening });
+    lastEnd = end;
+  }
+  if (lastEnd < endOfWall) spans.push({ start: lastEnd, end: endOfWall });
+  return spans;
+}
+
+export function wallParts(wall) {
+  const parts = [];
+  for (const { start, end, opening } of wallSpans(wall)) {
+    const base = wallFootprint(wall, start, end);
+    if (!opening) {
+      parts.push({ base, bottom: 0, top: wall.z });
+      continue;
+    }
+    if (opening.sill > 0) parts.push({ base, bottom: 0, top: opening.sill });
+    const head = opening.sill + opening.height;
+    if (head < wall.z) parts.push({ base, bottom: head, top: wall.z });
+  }
+  return parts;
+}
+
+export function wallQuantities(wall) {
+  const grossArea = length(wall) * wall.z;
+  const openingArea = wall.openings.reduce((sum, opening) => sum + opening.width * opening.height, 0);
+  const netArea = Math.max(0, grossArea - openingArea);
+  return { grossArea, openingArea, netArea, netVolume: netArea * wall.thickness };
+}
+
 export function roomProjection(shapes, degrees) {
   const angle = degrees * Math.PI / 180;
   const cosine = Math.cos(angle);
@@ -16,15 +87,13 @@ export function roomProjection(shapes, degrees) {
     const depth = x * sine + y * cosine;
     return { x: x * cosine - y * sine, y: depth * 0.5 - z * Math.sqrt(0.75), depth: depth * Math.sqrt(0.75) + z * 0.5 };
   };
-  for (const room of shapes) {
-    if (room.type !== 'room' || !validHeight(room.z)) continue;
-    const { x, y, w, h, z } = room;
-    const base = [[x, y, 0], [x + w, y, 0], [x + w, y + h, 0], [x, y + h, 0]];
-    const top = base.map(([px, py]) => [px, py, z]);
+  function addPrism(shape, footprint, bottom, height) {
+    const base = footprint.map(([x, y]) => [x, y, bottom]);
+    const top = footprint.map(([x, y]) => [x, y, height]);
     const add = (vertices, kind) => {
       const points = vertices.map(project);
       const depth = points.reduce((sum, point) => sum + point.depth, 0) / points.length;
-      faces.push({ points, depth, kind, id: room.id, layer: room.layer });
+      faces.push({ points, depth, kind, id: shape.id, layer: shape.layer });
     };
     for (let corner = 0; corner < 4; corner++) {
       const next = (corner + 1) % 4;
@@ -33,6 +102,15 @@ export function roomProjection(shapes, degrees) {
       if (dy * sine - dx * cosine > 0) add([base[corner], base[next], top[next], top[corner]], 'side');
     }
     add(top, 'top');
+  }
+  for (const shape of shapes) {
+    if (!validHeight(shape.z)) continue;
+    if (shape.type === 'wall') {
+      for (const part of wallParts(shape)) addPrism(shape, part.base, part.bottom, part.top);
+    } else {
+      const { x, y, w, h, z } = shape;
+      addPrism(shape, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], 0, z);
+    }
   }
   return faces.sort((left, right) => left.depth - right.depth);
 }
@@ -43,7 +121,8 @@ export function valid(shape) {
     ? [shape.x, shape.y, shape.w, shape.h, shape.x + shape.w, shape.y + shape.h, area(shape)]
     : [shape.x, shape.y, shape.x2, shape.y2, length(shape)];
   return values.every(Number.isFinite) &&
-    (shape.type === 'room' ? shape.w > 0 && shape.h > 0 && (shape.z == null || validHeight(shape.z)) : length(shape) > 0);
+    (shape.type === 'room' ? shape.w > 0 && shape.h > 0 && (shape.z == null || validHeight(shape.z))
+      : length(shape) > 0 && validWallDetails(shape));
 }
 
 export const residentialReference = Object.freeze({
@@ -105,7 +184,15 @@ export function dxf(shapes) {
     const layer = /^[A-Z0-9_-]{1,40}$/.test(shape.layer) ? shape.layer : '0';
     const { x, y, w, h } = shape;
     if (shape.type === 'wall') {
-      line(x, y, shape.x2, shape.y2, layer);
+      if (shape.thickness == null) {
+        line(x, y, shape.x2, shape.y2, layer);
+        continue;
+      }
+      for (const span of wallSpans(shape)) {
+        const corners = wallFootprint(shape, span.start, span.end);
+        const spanLayer = span.opening ? (span.opening.kind === 'door' ? 'A-DOOR' : 'A-GLAZ') : layer;
+        corners.forEach(([px, py], index) => line(px, py, ...corners[(index + 1) % corners.length], spanLayer));
+      }
       continue;
     }
     line(x, y, x + w, y, layer);
