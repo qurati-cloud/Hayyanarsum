@@ -1,5 +1,6 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
+import { cleanSaudiInputs, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type!=='wall'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type!=='wall'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type!=='wall'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
@@ -388,19 +389,19 @@ $('run').onclick = () => {
     : 'أدخل أبعادًا موجبة وصالحة.';
 };
 function runChecks() {
-  const ids = ['landArea','groundArea','upperArea','roofArea','roofBaseArea'];
-  const input = { buildingType: $('buildingType').value };
-  for (const id of ids) input[id] = $(id).value === '' ? NaN : Number($(id).value);
-  const results = compliance(input);
+  const input = cleanSaudiInputs({ ...Object.fromEntries(saudiTextFields.map(id => [id, $(id).value])),
+    ...Object.fromEntries(saudiNumberFields.map(id => [id, numberField(id)])) });
+  const results = saudiProjectReview(input, $('siteCity').value);
   const drafts = results.filter(result => result.status === 'draft').length;
   $('checks').childNodes[0].nodeValue = drafts;
-  $('summary').textContent = drafts ? 'نتائج استرشادية قيد المراجعة: ' + drafts : 'خارج نطاق المقارنة';
+  $('summary').textContent = drafts ? 'مقارنات استرشادية: ' + drafts : 'مسار المراجعة حسب البيانات المدخلة';
   $('results').replaceChildren();
   for (const result of results) {
     const card = document.createElement('article');
     card.className = 'result';
     const heading = document.createElement('h3');
-    heading.textContent = result.title;
+    const labels = { draft: 'استرشادي', pending: 'بيانات ناقصة', review: 'تتطلب مراجعة' };
+    heading.textContent = result.title + ' · ' + labels[result.status];
     const body = document.createElement('p');
     body.textContent = result.message;
     card.append(heading, body);
@@ -413,9 +414,44 @@ function runChecks() {
     $('results').append(card);
   }
 }
-$('checkForm').onsubmit = event => { event.preventDefault(); runChecks(); };
-const balady='https://balady.gov.sa/sites/default/files/2024-12/ashtratat%20a%27nsha%20almbany%20alsknyt%20almnshwrt%20%60ly%20mwq%60%20alwzart%20.pdf';$('sources').innerHTML=`<div class="source"><b>مسودة استرشادية</b><div><strong>اشتراطات إنشاء المباني السكنية</strong><p>النطاق: العمائر السكنية والسكنية التجارية، 4-2. لم يوثّق الإصدار وتاريخ النفاذ أو انطباق الاشتراطات المحلية بعد.</p><a href="${balady}" target="_blank">المصدر الرسمي</a></div><span>منصة بلدي</span></div><div class="source"><b>مرجع غير محوّل</b><div><strong>كود البناء السعودي 2024</strong><p>مسجل للمتابعة ولم تتحول مواده إلى قواعد حسابية بعد.</p><a href="https://www.sbc.gov.sa/ar/BC/Pages/BuildingCode/live_browsinghome.aspx" target="_blank">الاستعراض الرسمي</a></div><span>مراجعة مادة بمادة</span></div><div class="source"><b>موجهات مكانية</b><div><strong>العمارة السعودية</strong><p>19 طرازًا؛ لا تعامل كقانون إنشائي.</p><a href="https://architsaudi.dasc.gov.sa/ar/design-guidelines" target="_blank">الموجهات الرسمية</a></div><span>تصميمية</span></div>`;
-const styles=['النجدية','النجدية الشمالية','ساحل تبوك','المدينة المنورة','ريف المدينة المنورة','الحجازية الساحلية','الطائف','جبال السروات','أصدار عسير','سفوح تهامة','ساحل تهامة','مرتفعات أبها','جزر فرسان','بيشة الصحراوية','نجران','واحات الأحساء','القطيف','الساحل الشرقي','النجدية الشرقية'];$('styles').innerHTML=styles.map(x=>'<span>عمارة '+x+'</span>').join('');const mods=[['الرسم ثنائي الأبعاد','نواة عملية'],['DXF / SVG / JSON','تصدير فعلي'],['الكميات والتكلفة','نواة عملية'],['التحقق السعودي','مقارنات استرشادية'],['IFC4','تصدير الجدران والفتحات'],['التحليل الإنشائي','غير منفذ'],['MEP والمحاكاة','غير منفذ'],['التعاون والحسابات','غير منفذ']];$('modules').innerHTML=mods.map(x=>`<div class="module"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');$('projectForm').onsubmit=e=>{e.preventDefault();S.project={name:$('projectName').value,city:$('projectCity').value,revision:$('revision').value,description:$('description').value};localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('saved').textContent='تم الحفظ'};
+function updateReviewInputs() {
+  $('apartmentMeasurements').hidden = $('workType').value !== 'new' ||
+    !['apartment','mixed-apartment'].includes($('buildingType').value);
+  for (const field of $('apartmentMeasurements').querySelectorAll('input')) {
+    field.disabled = $('apartmentMeasurements').hidden;
+  }
+}
+for (const id of ['workType','buildingType']) $(id).onchange = updateReviewInputs;
+$('checkForm').onsubmit = event => {
+  event.preventDefault();
+  const textValues = Object.fromEntries(saudiTextFields.map(id => [id, $(id).value]));
+  const numbers = Object.fromEntries(saudiNumberFields.map(id => [id, numberField(id)]));
+  S.project = { ...S.project, city: $('siteCity').value.trim(), saudi: cleanSaudiInputs({ ...textValues, ...numbers }) };
+  $('projectCity').value = S.project.city;
+  runChecks();
+  try {
+    localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
+    $('reviewSaved').textContent = 'حُفظت بيانات التحقق محليًا.';
+  } catch {
+    $('reviewSaved').textContent = 'تعذّر الحفظ المحلي. يمكنك تصدير ملف المشروع لحفظ البيانات.';
+  }
+};
+for (const source of saudiSources) {
+  const row = document.createElement('div');
+  row.className = 'source';
+  const category = document.createElement('b');
+  category.textContent = source.category;
+  const body = document.createElement('div');
+  const link = document.createElement('a');
+  link.href = source.url;
+  link.textContent = source.title;
+  const note = document.createElement('p');
+  note.textContent = source.note;
+  body.append(link, note);
+  row.append(category, body);
+  $('sources').append(row);
+}
+const styles=['النجدية','النجدية الشمالية','ساحل تبوك','المدينة المنورة','ريف المدينة المنورة','الحجازية الساحلية','الطائف','جبال السروات','أصدار عسير','سفوح تهامة','ساحل تهامة','مرتفعات أبها','جزر فرسان','بيشة الصحراوية','نجران','واحات الأحساء','القطيف','الساحل الشرقي','النجدية الشرقية'];$('styles').innerHTML=styles.map(x=>'<span>عمارة '+x+'</span>').join('');const mods=[['الرسم ثنائي الأبعاد','نواة عملية'],['DXF / SVG / JSON','تصدير فعلي'],['الكميات والتكلفة','نواة عملية'],['التحقق السعودي','مقارنات استرشادية'],['IFC4','تصدير الجدران والفتحات'],['التحليل الإنشائي','غير منفذ'],['MEP والمحاكاة','غير منفذ'],['التعاون والحسابات','غير منفذ']];$('modules').innerHTML=mods.map(x=>`<div class="module"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');$('projectForm').onsubmit=e=>{e.preventDefault();S.project={...S.project,name:$('projectName').value,city:$('projectCity').value,revision:$('revision').value,description:$('description').value};localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('saved').textContent='تم الحفظ';loadSaudiFields()};
 function readProject(data) {
   if (data?.schema !== 2 || !Array.isArray(data.shapes) || data.shapes.length > 5000) throw new TypeError('Invalid project');
   const levels = validateLevels(data.levels);
@@ -436,6 +472,7 @@ function readProject(data) {
           openings: openings?.map(({ kind, offset, width, sill, height }) => ({ kind, offset, width, sill, height })) };
   });
   const project = {};
+  project.saudi = cleanSaudiInputs(data.project?.saudi);
   for (const key of ['name','city','revision','description']) {
     if (typeof data.project?.[key] === 'string') project[key] = data.project[key].slice(0, 4000);
   }
@@ -452,6 +489,14 @@ function loadProjectFields() {
     $(id).value = S.project[key] ?? $(id).defaultValue;
   }
   document.querySelectorAll('[data-tool]').forEach(button => button.classList.toggle('active', button.dataset.tool === S.tool));
+  loadSaudiFields();
+}
+function loadSaudiFields() {
+  const saved = cleanSaudiInputs(S.project.saudi);
+  $('siteCity').value = S.project.city ?? '';
+  for (const id of [...saudiTextFields, ...saudiNumberFields]) $(id).value = saved[id] ?? '';
+  updateReviewInputs();
+  runChecks();
 }
 function updateIfcExport() {
   const count = S.shapes.filter(shape => isIfcWall(shape) || isIfcSlab(shape)).length;
@@ -515,4 +560,3 @@ $('toggle3d').onclick = () => {
 $('azimuth').oninput = render3d;
 loadProjectFields();
 render();
-runChecks();

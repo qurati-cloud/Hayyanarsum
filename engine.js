@@ -218,7 +218,7 @@ export function compliance(input) {
     const complete = numerator >= 0 && denominator > 0 && Number.isFinite(ratio);
     return {
       title,
-      status: 'draft',
+      status: complete ? 'draft' : 'pending',
       message: complete
         ? `النسبة المحسوبة ${ratio.toFixed(2)}%، والقيمة المرجعية ${limit}%. ${ratio > limit ? 'تتجاوز القيمة المرجعية.' : 'ضمن القيمة المرجعية.'} تطبيق الشرط على الموقع وتاريخ نفاذه قيد المراجعة.`
         : 'أدخل مساحة غير سالبة ومقامًا موجبًا للمقارنة.',
@@ -231,6 +231,93 @@ export function compliance(input) {
     status: 'draft',
     message: 'الفحص معلق. تحتاج الارتدادات إلى بيانات مستقلة لكل واجهة وحد مجاور، ومواقف المحلات إلى عدد المحلات ومساحاتها.',
     source: 'اشتراطات إنشاء المباني السكنية، 4-2، البنود 4–6',
+    url: residentialReference.url,
+  });
+  return results;
+}
+
+const saudiLawUrl = 'https://laws.boe.gov.sa/BoeLaws/Laws/LawDetails/cfc97985-4a9f-4012-832b-a9a700f21ed2/1';
+export const saudiSources = [
+  { category: 'نظام ملزم', title: 'نظام تطبيق كود البناء السعودي', url: saudiLawUrl,
+    note: 'المادة الثانية، الفقرة 1. صُدر في 24 يناير 2017. يحدد الفحص نطاق مسار المراجعة.' },
+  { category: 'اشتراطات بلدية · نتائج استرشادية', ...residentialReference,
+    note: 'العمائر السكنية والسكنية التجارية، 4-2. تاريخ نفاذ النسخة وانطباق الضوابط المحلية قيد التحقق.' },
+  { category: 'مرجع فني · مراجعة لازمة', title: 'كود البناء السعودي',
+    url: 'https://www.sbc.gov.sa/ar/BC/Pages/BuildingCode/live_browsinghome.aspx',
+    note: 'يعرض المركز إصدارات الكود. يتطلب المشروع تأكيد الإصدار والأجزاء المنطبقة لدى الجهة المختصة.' },
+  { category: 'موجهات تصميمية مرتبطة بالموقع', title: 'العمارة السعودية',
+    url: 'https://architsaudi.dasc.gov.sa/ar/design-guidelines',
+    note: 'يُرجع إلى الموجه التصميمي للقطعة والمرحلة ونوع المشروع لتحديد ما يلزم منها.' },
+  { category: 'أهداف استراتيجية', title: 'رؤية السعودية 2030',
+    url: 'https://www.vision2030.gov.sa/en/overview',
+    note: 'مرجع للأهداف والبرامج؛ تتبع المتطلبات الملزمة للأنظمة والاشتراطات ذات الصلة بالمشروع.' },
+];
+
+export const saudiTextFields = ['municipality', 'parcelReference', 'buildingType', 'workType', 'localGuide'];
+export const saudiNumberFields = ['landArea', 'groundArea', 'upperArea', 'roofArea', 'roofBaseArea',
+  'units', 'parking', 'streetWidth', 'frontSetback'];
+
+export function cleanSaudiInputs(value = {}) {
+  const input = value && typeof value === 'object' ? value : {};
+  return {
+    ...Object.fromEntries(saudiTextFields.map(key => [key, typeof input[key] === 'string' ? input[key].trim().slice(0, 250) : ''])),
+    ...Object.fromEntries(saudiNumberFields.map(key => [key, Number.isFinite(input[key]) ? input[key] : null])),
+  };
+}
+
+export function saudiProjectReview(input, city) {
+  const scope = ['new', 'renovation', 'change-use', 'extension', 'alteration'].includes(input.workType);
+  const knownSite = Boolean(city?.trim() && input.municipality && input.parcelReference);
+  const results = [{
+    status: scope ? 'review' : 'pending',
+    title: 'نطاق نظام تطبيق كود البناء السعودي',
+    message: scope
+      ? 'نوع العمل المدخل يستلزم مراجعة الكود. ينبغي تأكيد الجزء والإصدار المنطبقين والضوابط الخاصة بالموقع قبل الاعتماد.'
+      : 'حدّد نوع العمل لتحديد مسار مراجعة الكود.',
+    source: 'نظام تطبيق كود البناء السعودي، المادة الثانية، الفقرة 1',
+    url: saudiLawUrl,
+  }, {
+    status: knownSite ? 'review' : 'pending',
+    title: 'ضوابط البلدية والعمارة السعودية',
+    message: knownSite
+      ? input.localGuide
+        ? 'سُجّل مرجع الموقع المدخل: ' + input.localGuide + '. ينبغي التحقق من نسخته ونطاقه لدى الجهة المختصة.'
+        : 'سُجّل الموقع. أضف رابط أو رقم الموجه والاشتراط المحلي للقطعة بعد مراجعة الجهة المختصة.'
+      : 'أدخل المدينة والبلدية ومرجع قطعة الأرض أو التقرير المساحي.',
+    source: 'الموجهات التصميمية للعمارة السعودية',
+    url: saudiSources[3].url,
+  }];
+  if (!knownSite || input.workType !== 'new' || !['apartment', 'mixed-apartment'].includes(input.buildingType)) return results;
+
+  // Empty persisted values are missing inputs, not measurements of zero.
+  const comparable = Object.fromEntries(saudiNumberFields.map(key => [key, input[key] ?? NaN]));
+  results.push(...compliance({ ...comparable, buildingType: 'apartment' }).slice(0, 3));
+  const { units, parking, streetWidth, frontSetback } = comparable;
+  const validParking = Number.isSafeInteger(units) && units > 0 && units <= Number.MAX_SAFE_INTEGER / 2 &&
+    Number.isSafeInteger(parking) && parking >= 0;
+  const requiredParking = Math.ceil(units * 1.5);
+  results.push({
+    status: validParking ? 'draft' : 'pending',
+    title: 'مواقف الشقق داخل حدود الملكية',
+    message: validParking
+      ? 'الحد في المرجع ' + requiredParking + ' موقفًا، والمدخل ' + parking +
+        '. ' + (parking < requiredParking ? 'أقل من العدد المرجعي.' : 'يبلغ العدد المرجعي أو يتجاوزه.') +
+        (input.buildingType === 'mixed-apartment' ? ' مواقف الأنشطة التجارية تحتاج فحصًا مستقلًا.' : '')
+      : 'أدخل عدد الشقق والمواقف المخصصة لها داخل حدود الملكية.',
+    source: 'اشتراطات إنشاء المباني السكنية، 4-2، بند 6',
+    url: residentialReference.url,
+  });
+  const validFront = Number.isFinite(streetWidth) && streetWidth > 0 && Number.isFinite(frontSetback) && frontSetback >= 0;
+  const requiredFront = Math.max(streetWidth / 5, 3);
+  results.push({
+    status: validFront ? 'draft' : 'pending',
+    title: 'الارتداد عن الواجهة الأمامية المدخلة',
+    message: validFront
+      ? 'الحد في المرجع ' + requiredFront.toFixed(2) + ' م. ' +
+        (frontSetback < requiredFront ? 'القياس أقل من الحد المرجعي.' : 'القياس يبلغ الحد المرجعي أو يتجاوزه.') +
+        ' تُراجع بقية حدود القطعة والضوابط المحلية على حدة.'
+      : 'أدخل عرض الشارع الأمامي والارتداد من حدود الملكية إلى حد البناء الأرضي.',
+    source: 'اشتراطات إنشاء المباني السكنية، 4-2، بند 4',
     url: residentialReference.url,
   });
   return results;
