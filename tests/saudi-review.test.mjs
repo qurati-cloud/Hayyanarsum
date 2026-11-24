@@ -33,3 +33,28 @@ test('missing site and unrelated categories never run apartment comparisons', ()
   assert.equal(saudiProjectReview({ ...input, buildingType: 'villa' }, 'الرياض').length, 2);
   assert.ok(saudiSources.some(source => source.category === 'أهداف استراتيجية'));
 });
+
+test('separate site boundaries use their own widths and the verified floor-count distinction', () => {
+  const metrics = cleanSaudiInputs({ ...input, floorCount: 5, edges: [
+    { name:'غرب', kind:'street', streetWidth:15, setback:3 },
+    { name:'شرق', kind:'neighbor', setback:2.5 },
+    { name:'ممر', kind:'other', setback:9 },
+  ] });
+  const edges = (values) => saudiProjectReview(values, 'الرياض').slice(7, 10);
+  const [street, neighbor, special] = edges(metrics);
+  assert.match(street.message, /3\.00 م.*يبلغ الحد/);
+  assert.match(neighbor.message, /2\.00 م.*يبلغ الحد/);
+  assert.equal(special.status, 'review');
+  assert.match(edges({ ...metrics, floorCount: 6 })[1].message, /3\.00 م.*أقل/);
+  assert.equal(edges({ ...metrics, floorCount: null })[1].status, 'pending');
+});
+
+test('commercial parking is a separate lower bound and accessibility stays a review referral', () => {
+  const review = saudiProjectReview(cleanSaudiInputs({ ...input, shopCount: 4, retailArea: 180, retailParking: 3 }), 'جدة');
+  assert.match(review.at(-2).message, /الإجمالية وعدد المحلات 4.*أقل/);
+  assert.match(review.at(-1).message, /تندرج/);
+  assert.equal(review.at(-1).status, 'review');
+  const homes = { ...input, buildingType:'apartment' };
+  assert.match(saudiProjectReview(homes, 'جدة').at(-1).message, /دون عتبة/);
+  assert.match(saudiProjectReview({ ...homes, units:4 }, 'جدة').at(-1).message, /تندرج/);
+});

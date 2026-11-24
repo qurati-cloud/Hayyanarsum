@@ -255,13 +255,28 @@ export const saudiSources = [
 
 export const saudiTextFields = ['municipality', 'parcelReference', 'buildingType', 'workType', 'localGuide'];
 export const saudiNumberFields = ['landArea', 'groundArea', 'upperArea', 'roofArea', 'roofBaseArea',
-  'units', 'parking', 'streetWidth', 'frontSetback'];
+  'units', 'parking', 'streetWidth', 'frontSetback', 'floorCount', 'shopCount', 'retailArea', 'retailParking'];
+export const saudiEdgeKinds = Object.freeze({
+  street: 'شارع جانبي أو خلفي',
+  neighbor: 'حد مجاور',
+  other: 'ممر أو ساحة أو حد آخر',
+});
 
 export function cleanSaudiInputs(value = {}) {
   const input = value && typeof value === 'object' ? value : {};
+  const edges = Array.isArray(input.edges) ? input.edges.slice(0, 24).map(value => {
+    const edge = value && typeof value === 'object' ? value : {};
+    return {
+      name: typeof edge.name === 'string' ? edge.name.trim().slice(0, 100) : '',
+      kind: typeof edge.kind === 'string' && Object.hasOwn(saudiEdgeKinds, edge.kind) ? edge.kind : 'other',
+      streetWidth: Number.isFinite(edge.streetWidth) ? edge.streetWidth : null,
+      setback: Number.isFinite(edge.setback) ? edge.setback : null,
+    };
+  }) : [];
   return {
     ...Object.fromEntries(saudiTextFields.map(key => [key, typeof input[key] === 'string' ? input[key].trim().slice(0, 250) : ''])),
     ...Object.fromEntries(saudiNumberFields.map(key => [key, Number.isFinite(input[key]) ? input[key] : null])),
+    edges,
   };
 }
 
@@ -315,9 +330,63 @@ export function saudiProjectReview(input, city) {
     message: validFront
       ? 'الحد في المرجع ' + requiredFront.toFixed(2) + ' م. ' +
         (frontSetback < requiredFront ? 'القياس أقل من الحد المرجعي.' : 'القياس يبلغ الحد المرجعي أو يتجاوزه.') +
-        ' تُراجع بقية حدود القطعة والضوابط المحلية على حدة.'
+        ' تُراجع الضوابط المحلية واشتراطات الواجهات الأخرى على حدة.'
       : 'أدخل عرض الشارع الأمامي والارتداد من حدود الملكية إلى حد البناء الأرضي.',
     source: 'اشتراطات إنشاء المباني السكنية، 4-2، بند 4',
+    url: residentialReference.url,
+  });
+  const floorCount = comparable.floorCount;
+  for (const [index, edge] of (input.edges ?? []).entries()) {
+    const neighboring = edge.kind === 'neighbor';
+    const street = edge.kind === 'street';
+    const comparableEdge = neighboring ? Number.isSafeInteger(floorCount) && floorCount > 0
+      : street && Number.isFinite(edge.streetWidth) && edge.streetWidth > 0;
+    const minimum = neighboring ? (floorCount > 5 ? 3 : 2) : Math.max(edge.streetWidth / 5, 2);
+    const measured = edge.setback != null && Number.isFinite(edge.setback) && edge.setback >= 0;
+    const ready = comparableEdge && measured;
+    const label = edge.name || 'الحد ' + (index + 1);
+    const message = ready
+      ? 'الحد في المرجع ' + minimum.toFixed(2) + ' م، والقياس ' + edge.setback.toFixed(2) +
+        ' م. ' + (edge.setback < minimum ? 'القياس أقل من الحد المرجعي.' : 'القياس يبلغ الحد المرجعي أو يتجاوزه.')
+      : neighboring ? 'أدخل عدد الأدوار وفق مستند المشروع والارتداد الأرضي لهذا الحد.'
+        : street ? 'أدخل عرض الشارع والارتداد الأرضي لهذا الحد.'
+          : 'يلزم الرجوع إلى الجهة المختصة لتحديد شرط هذا النوع من الحدود.';
+    results.push({
+      status: ready ? 'draft' : (neighboring || street ? 'pending' : 'review'),
+      title: 'ارتداد ' + label + ' · ' + saudiEdgeKinds[edge.kind],
+      message,
+      source: 'اشتراطات إنشاء المباني السكنية، 4-2، بند 4؛ قياس الارتداد، 4، بند 11',
+      url: residentialReference.url,
+    });
+  }
+  const mixed = input.buildingType === 'mixed-apartment';
+  if (mixed) {
+    const { shopCount, retailArea, retailParking } = comparable;
+    const known = Number.isSafeInteger(shopCount) && shopCount > 0 && Number.isFinite(retailArea) && retailArea > 0 &&
+      Number.isSafeInteger(retailParking) && retailParking >= 0;
+    const lowerBound = Math.max(shopCount, Math.ceil(retailArea / 45));
+    results.push({
+      status: known ? 'draft' : 'pending',
+      title: 'الحد الأدنى الحسابي لمواقف المحلات',
+      message: known
+        ? 'الحد الأدنى المستنتج من المساحة الإجمالية وعدد المحلات ' + lowerBound + '، والمدخل ' + retailParking +
+          '. ' + (retailParking < lowerBound ? 'العدد أقل من هذا الحد.' : 'العدد يبلغ هذا الحد أو يتجاوزه.') +
+          ' تُراجع المساحات المقبولة وتوزيع المواقف لكل محل لدى الجهة المختصة.'
+        : 'أدخل عدد المحلات ومساحتها التجارية المعتمدة للحساب والمواقف المخصصة لها داخل الملكية.',
+      source: 'اشتراطات إنشاء المباني السكنية، 4-2، بند 5',
+      url: residentialReference.url,
+    });
+  }
+  const countKnown = Number.isSafeInteger(units) && units > 0;
+  results.push({
+    status: mixed || countKnown ? 'review' : 'pending',
+    title: 'تحديد نطاق مراجعة الوصول الشامل',
+    message: mixed || (countKnown && units >= 4)
+      ? 'تندرج هذه الفئة ضمن نطاق مراجعة الوصول الشامل في المرجع. تُراجع المسارات والمواقف والمنحدرات والفراغات وفق الجزء المعني من الكود.'
+      : countKnown
+        ? 'عدد الوحدات دون عتبة الأربع في هذا البند. تُراجع متطلبات الوصول الأخرى وفق الكود والضوابط المحلية.'
+        : 'أدخل عدد الوحدات السكنية لتحديد نطاق هذا البند.',
+    source: 'اشتراطات إنشاء المباني السكنية، 5-1-3، بندا 1 و2',
     url: residentialReference.url,
   });
   return results;

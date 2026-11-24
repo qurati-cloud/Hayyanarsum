@@ -60,8 +60,17 @@
     <div class="two"><label>مساحة الملحق العلوي (م²)<input id="roofArea" type="number" min="0" step="any"></label><label>مساحة الدور أسفل الملحق (م²)<input id="roofBaseArea" type="number" min="0" step="any"></label></div>
     <div class="two"><label>عدد الشقق<input id="units" type="number" min="1" step="1"></label><label>المواقف المخصصة للشقق داخل الملكية<input id="parking" type="number" min="0" step="1"></label></div>
     <div class="two"><label>عرض الشارع الأمامي (م)<input id="streetWidth" type="number" min="0" step="any"></label><label>الارتداد الأمامي المقاس (م)<input id="frontSetback" type="number" min="0" step="any"></label></div>
+    <label>عدد أدوار المبنى وفق المستند المعتمد<input id="floorCount" type="number" min="1" step="1"></label>
+    <fieldset class="review-fields"><legend>الحدود الجانبية والخلفية</legend>
+      <div id="siteEdges"></div><button id="addSiteEdge" type="button">إضافة حدّ للقطعة</button>
+    </fieldset>
+    <fieldset id="retailFields" class="review-fields" hidden><legend>مواقف المحلات التجارية</legend>
+      <div class="two"><label>عدد المحلات<input id="shopCount" type="number" min="1" step="1"></label><label>المساحة التجارية المعتمدة للحساب (م²)<input id="retailArea" type="number" min="0" step="any"></label></div>
+      <label>مواقف المحلات داخل الملكية<input id="retailParking" type="number" min="0" step="1"></label>
+    </fieldset>
   </details>
   <button class="primary" type="submit">حفظ البيانات وحساب المقارنات</button>
+  <button id="exportSaudiReview" type="button">تنزيل تقرير المراجعة CSV</button>
   <p id="reviewSaved" role="status"></p>
 </form><div><div id="summary" class="summary"></div><div id="results"></div></div></div>
 <section class="panel"><div class="heading"><div><em>سجل المصادر</em><h2>الأكواد والأنظمة</h2></div></div><div id="sources"></div></section><section class="panel"><em>الهوية المكانية</em><h2>الطرز المعمارية السعودية التسعة عشر</h2><p>موجهات تصميمية مكانية؛ لا تُعامل تلقائيًا كقيم إنشائية أو كود بناء.</p><div id="styles" class="chips"></div></section></section>

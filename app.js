@@ -1,6 +1,6 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
-import { cleanSaudiInputs, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
+import { cleanSaudiInputs, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type!=='wall'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type!=='wall'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type!=='wall'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
@@ -388,9 +388,67 @@ $('run').onclick = () => {
     ? 'أُضيفت مساحة بأبعاد ' + width + ' × ' + height + ' م.'
     : 'أدخل أبعادًا موجبة وصالحة.';
 };
+const reviewLabels = { draft: 'استرشادي', pending: 'بيانات ناقصة', review: 'تتطلب مراجعة' };
+
+function readReviewInputs() {
+  const text = Object.fromEntries(saudiTextFields.map(id => [id, $(id).value]));
+  const numbers = Object.fromEntries(saudiNumberFields.map(id => [id, numberField(id)]));
+  const edges = [...$('siteEdges').querySelectorAll('fieldset')].map(row => {
+    const value = key => row.querySelector('[data-key="' + key + '"]').value;
+    const number = key => value(key) === '' ? null : Number(value(key));
+    return { name: value('name'), kind: value('kind'), streetWidth: number('streetWidth'), setback: number('setback') };
+  });
+  return cleanSaudiInputs({ ...text, ...numbers, edges });
+}
+
+function addSiteEdge(edge = {}) {
+  const list = $('siteEdges');
+  if (list.childElementCount >= 24) return;
+  const row = document.createElement('fieldset');
+  row.className = 'review-fields';
+  const legend = document.createElement('legend');
+  legend.textContent = 'حد إضافي';
+  row.append(legend);
+  function field(key, caption, type) {
+    const label = document.createElement('label');
+    label.textContent = caption;
+    const input = document.createElement(type === 'select' ? 'select' : 'input');
+    input.dataset.key = key;
+    if (type === 'select') {
+      for (const [kind, display] of Object.entries(saudiEdgeKinds)) input.add(new Option(display, kind));
+    } else {
+      input.type = type;
+      if (type === 'number') {
+        input.min = 0;
+        input.step = 'any';
+      } else {
+        input.maxLength = 100;
+      }
+    }
+    input.value = edge[key] ?? (key === 'kind' ? 'street' : '');
+    label.append(input);
+    row.append(label);
+    return input;
+  }
+  field('name', 'اسم الحد', 'text');
+  const kind = field('kind', 'نوع الحد', 'select');
+  const width = field('streetWidth', 'عرض الشارع لهذا الحد (م)', 'number');
+  field('setback', 'الارتداد الأرضي المقاس (م)', 'number');
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.textContent = 'إزالة هذا الحد';
+  remove.onclick = () => {
+    row.remove();
+    updateReviewInputs();
+  };
+  kind.onchange = updateReviewInputs;
+  row.append(remove);
+  list.append(row);
+  updateReviewInputs();
+}
+
 function runChecks() {
-  const input = cleanSaudiInputs({ ...Object.fromEntries(saudiTextFields.map(id => [id, $(id).value])),
-    ...Object.fromEntries(saudiNumberFields.map(id => [id, numberField(id)])) });
+  const input = readReviewInputs();
   const results = saudiProjectReview(input, $('siteCity').value);
   const drafts = results.filter(result => result.status === 'draft').length;
   $('checks').childNodes[0].nodeValue = drafts;
@@ -400,8 +458,7 @@ function runChecks() {
     const card = document.createElement('article');
     card.className = 'result';
     const heading = document.createElement('h3');
-    const labels = { draft: 'استرشادي', pending: 'بيانات ناقصة', review: 'تتطلب مراجعة' };
-    heading.textContent = result.title + ' · ' + labels[result.status];
+    heading.textContent = result.title + ' · ' + reviewLabels[result.status];
     const body = document.createElement('p');
     body.textContent = result.message;
     card.append(heading, body);
@@ -420,13 +477,21 @@ function updateReviewInputs() {
   for (const field of $('apartmentMeasurements').querySelectorAll('input')) {
     field.disabled = $('apartmentMeasurements').hidden;
   }
+  $('retailFields').hidden = $('buildingType').value !== 'mixed-apartment';
+  $('retailFields').disabled = $('retailFields').hidden || $('apartmentMeasurements').hidden;
+  for (const row of $('siteEdges').querySelectorAll('fieldset')) {
+    row.disabled = $('apartmentMeasurements').hidden;
+    const width = row.querySelector('[data-key="streetWidth"]');
+    width.disabled = row.querySelector('[data-key="kind"]').value !== 'street';
+    width.parentElement.hidden = width.disabled;
+  }
+  $('addSiteEdge').disabled = $('siteEdges').childElementCount >= 24;
 }
 for (const id of ['workType','buildingType']) $(id).onchange = updateReviewInputs;
+$('addSiteEdge').onclick = () => addSiteEdge();
 $('checkForm').onsubmit = event => {
   event.preventDefault();
-  const textValues = Object.fromEntries(saudiTextFields.map(id => [id, $(id).value]));
-  const numbers = Object.fromEntries(saudiNumberFields.map(id => [id, numberField(id)]));
-  S.project = { ...S.project, city: $('siteCity').value.trim(), saudi: cleanSaudiInputs({ ...textValues, ...numbers }) };
+  S.project = { ...S.project, city: $('siteCity').value.trim(), saudi: readReviewInputs() };
   $('projectCity').value = S.project.city;
   runChecks();
   try {
@@ -435,6 +500,31 @@ $('checkForm').onsubmit = event => {
   } catch {
     $('reviewSaved').textContent = 'تعذّر الحفظ المحلي. يمكنك تصدير ملف المشروع لحفظ البيانات.';
   }
+};
+$('exportSaudiReview').onclick = () => {
+  if (!$('checkForm').reportValidity()) return;
+  const city = $('siteCity').value.trim();
+  const input = readReviewInputs();
+  const rows = [
+    ['تقرير مراجعة استرشادي', new Date().toISOString()],
+    ['المشروع', S.project.name ?? ''], ['المدينة', city], ['البلدية', input.municipality],
+    ['مرجع القطعة', input.parcelReference], ['مرجع الاشتراط المحلي', input.localGuide],
+    ['نوع المشروع', $('buildingType').selectedOptions[0]?.text ?? ''],
+    ['نوع العمل', $('workType').selectedOptions[0]?.text ?? ''],
+    [], ['المدخل', 'القيمة'],
+  ];
+  if (!$('apartmentMeasurements').hidden) {
+    saudiNumberFields.filter(id => !$(id).closest('fieldset[hidden]')).forEach(id =>
+      rows.push([$(id).labels[0].textContent.trim(), input[id] ?? '']));
+    rows.push([], ['الحد', 'النوع', 'عرض الشارع (م)', 'الارتداد المقاس (م)']);
+    input.edges.forEach((edge, index) => rows.push([edge.name || 'الحد ' + (index + 1),
+      saudiEdgeKinds[edge.kind], edge.kind === 'street' ? edge.streetWidth ?? '' : '', edge.setback ?? '']));
+  }
+  rows.push([], ['الفحص', 'الحالة', 'النتيجة', 'المرجع', 'الرابط']);
+  for (const result of saudiProjectReview(input, city)) {
+    rows.push([result.title, reviewLabels[result.status], result.message, result.source, result.url]);
+  }
+  dl('hayyanarsum-saudi-review.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
 for (const source of saudiSources) {
   const row = document.createElement('div');
@@ -495,6 +585,8 @@ function loadSaudiFields() {
   const saved = cleanSaudiInputs(S.project.saudi);
   $('siteCity').value = S.project.city ?? '';
   for (const id of [...saudiTextFields, ...saudiNumberFields]) $(id).value = saved[id] ?? '';
+  $('siteEdges').replaceChildren();
+  for (const edge of saved.edges) addSiteEdge(edge);
   updateReviewInputs();
   runChecks();
 }
