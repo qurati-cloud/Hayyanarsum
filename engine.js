@@ -24,6 +24,28 @@ export const length = shape => isLinear(shape) ? Math.hypot(shape.x2 - shape.x, 
 export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
 
 export const measurementLimit = 500;
+export function planView(shapes, measurements, pixelsPerMetre) {
+  const points = measurements.flatMap(({ x, y, x2, y2 }) => [[x, y], [x2, y2]]);
+  for (const shape of shapes) {
+    if (shape.type === 'wall' && shape.thickness != null) {
+      points.push(...wallFootprint(shape, 0, length(shape)));
+    } else if (isLinear(shape)) {
+      points.push([shape.x, shape.y], [shape.x2, shape.y2]);
+    } else {
+      points.push([shape.x, shape.y], [shape.x + shape.w, shape.y + shape.h]);
+    }
+  }
+  const xs = points.map(([x]) => x * pixelsPerMetre);
+  const ys = points.map(([, y]) => y * pixelsPerMetre);
+  const left = Math.min(...xs), top = Math.min(...ys);
+  const width = Math.max(...xs) - left, height = Math.max(...ys) - top;
+  if (![left, top, width, height].every(Number.isFinite)) return [0, 0, 1200, 700];
+  const ratio = 12 / 7;
+  const fittedWidth = Math.max(width, height * ratio, pixelsPerMetre) * 1.25;
+  const fittedHeight = fittedWidth / ratio;
+  return [left + (width - fittedWidth) / 2, top + (height - fittedHeight) / 2, fittedWidth, fittedHeight];
+}
+
 export function measureSegment({ x, y, x2, y2 }) {
   if (![x, y, x2, y2].every(value => Number.isFinite(value) && Math.abs(value) <= 1e9)) return null;
   const dx = x2 - x, dy = y2 - y;

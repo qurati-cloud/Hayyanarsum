@@ -6,7 +6,7 @@ import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalK
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
-import{snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,planView,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 let fitDrawing = false;
 let snapCadEndpoints = false;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[];clearCoordination()};
@@ -54,26 +54,14 @@ $('svg').onpointercancel = () => {
   start = null;
   $('preview').replaceChildren();
 };
+const levelMeasurements = () => S.measurements.filter(item => item.levelId === S.activeLevel);
+function setDrawingExtent(svg, view) {
+  svg.setAttribute('viewBox', view.join(' '));
+  const grid = svg.querySelector('#gridRect');
+  if (grid) ['x', 'y', 'width', 'height'].forEach((key, index) => grid.setAttribute(key, view[index]));
+}
 function updateDrawingExtent() {
-  let view = [0, 0, 1200, 700];
-  const shapes = fitDrawing ? [...levelShapes(), ...S.measurements.filter(item => item.levelId === S.activeLevel)
-    .map(item => ({ ...item, type: 'cadLine' }))] : [];
-  if (shapes.length) {
-    const points = shapes.flatMap(shape => isLinear(shape)
-      ? [[shape.x, shape.y], [shape.x2, shape.y2]]
-      : [[shape.x, shape.y], [shape.x + shape.w, shape.y + shape.h]]);
-    const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
-    const x = Math.min(...xs) * PX, y = Math.min(...ys) * PX;
-    const w = Math.max(...xs) * PX - x, h = Math.max(...ys) * PX - y;
-    if ([x, y, w, h].every(Number.isFinite)) {
-      const ratio = 12 / 7;
-      const width = Math.max(w, h * ratio, PX) * 1.2;
-      const height = width / ratio;
-      view = [x + (w - width) / 2, y + (h - height) / 2, width, height];
-    }
-  }
-  $('svg').setAttribute('viewBox', view.join(' '));
-  ['x', 'y', 'width', 'height'].forEach((key, index) => $('gridRect').setAttribute(key, view[index]));
+  setDrawingExtent($('svg'), fitDrawing ? planView(levelShapes(), levelMeasurements(), PX) : [0, 0, 1200, 700]);
   $('fitDrawing').setAttribute('aria-pressed', String(fitDrawing));
   $('fitDrawing').classList.toggle('active', fitDrawing);
 }
@@ -462,7 +450,7 @@ $('editRoom').onclick = () => {
   render();
 };
 $('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());clearCoordination();loadTransmissionForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());clearCoordination();loadTransmissionForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
-function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob ? t : new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('exportSVG').onclick=()=>dl('hayyanarsum.svg',new XMLSerializer().serializeToString($('svg')),'image/svg+xml');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
+function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob ? t : new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 $('importDXF').onchange = async event => {
   const file = event.target.files[0];
   const status = $('dxfImportStatus');
@@ -529,6 +517,11 @@ function renderMeasurements() {
     const { x, y, x2, y2 } = item;
     const { dx, dy, distance } = measureSegment(item);
     group.append(el('line', { x1: x * PX, y1: y * PX, x2: x2 * PX, y2: y2 * PX }));
+    const label = el('text', {
+      x: (x + x2) / 2 * PX, y: (y + y2) / 2 * PX, 'text-anchor': 'middle', dy: '-.35em',
+    });
+    label.textContent = measurementFormat.format(distance) + ' م';
+    group.append(label);
     const row = rows.insertRow();
     for (const value of [dx, dy, distance]) row.insertCell().textContent = measurementFormat.format(value);
     const button = document.createElement('button');
@@ -547,6 +540,50 @@ function renderMeasurements() {
   $('measurementTable').hidden = rows.rows.length === 0;
   $('exportMeasurements').disabled = S.measurements.length === 0;
 }
+
+function annotatedPlan() {
+  const svg = $('svg').cloneNode(true);
+  svg.removeAttribute('id');
+  svg.classList.add('annotated-plan');
+  svg.querySelector('#preview').remove();
+  if ($('gridRect').hidden) svg.querySelector('#gridRect').remove();
+  for (const shape of svg.querySelectorAll('.selected')) shape.classList.remove('selected');
+  const view = planView(levelShapes(), levelMeasurements(), PX);
+  setDrawingExtent(svg, view);
+  const labelSize = Math.max(2, view[2] * .014);
+  svg.setAttribute('width', 1200);
+  svg.setAttribute('height', 700);
+  const style = el('style');
+  style.textContent = [
+    '.annotated-plan #minor path{fill:none;stroke:#dfe7e3}',
+    '.annotated-plan #grid > path{fill:none;stroke:#b9cac3;stroke-width:1.4}',
+    '.annotated-plan #dims text,.annotated-plan #shapes .dim{font:' + labelSize + 'px Tahoma,Arial,sans-serif;fill:#405b52}',
+    '.annotated-plan #measurementMarks line{stroke:#855a17;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}',
+    '.annotated-plan #measurementMarks text{font:' + labelSize + 'px Tahoma,Arial,sans-serif;fill:#694407;stroke:white;stroke-width:' +
+      labelSize * .22 + ';paint-order:stroke;stroke-linejoin:round}',
+  ].join('\n');
+  const title = el('title');
+  title.textContent = planTitle();
+  svg.prepend(title, style);
+  return svg;
+}
+
+function planTitle() {
+  const level = S.levels.find(item => item.id === S.activeLevel);
+  return (S.project.name || 'هيا نرسم') + ' · ' + level.name + ' · ' + level.elevation + ' م';
+}
+
+$('exportSVG').onclick = () =>
+  dl('hayyanarsum-plan.svg', new XMLSerializer().serializeToString(annotatedPlan()), 'image/svg+xml');
+$('printPlan').onclick = () => {
+  const heading = document.createElement('h1');
+  heading.textContent = planTitle();
+  const note = document.createElement('p');
+  note.textContent = 'مخطط الطابق للمراجعة. القيم بالمتر، ومقياس الطباعة يتبع حجم الورق.';
+  $('printSheet').replaceChildren(heading, note, annotatedPlan());
+  window.print();
+};
+window.addEventListener('afterprint', () => $('printSheet').replaceChildren());
 
 $('measurementForm').onsubmit = event => {
   event.preventDefault();

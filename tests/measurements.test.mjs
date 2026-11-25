@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanMeasurements, groundLevel, measureSegment } from '../engine.js';
+import { cleanMeasurements, groundLevel, measureSegment, planView } from '../engine.js';
 
 const segment = { levelId: groundLevel.id, x: 1.375, y: 2.125, x2: 4.375, y2: -1.875 };
 test('measurements retain precise coordinates and signed differences', () => {
@@ -13,4 +13,14 @@ test('project restoration keeps valid measurements, validates storeys and ignore
   const inputs = [null, { ...segment, distance: 15 }, { ...segment, levelId: 'missing' }, { ...segment, x: '1.375' }];
   assert.deepEqual(cleanMeasurements(inputs, [groundLevel]), [segment]);
   assert.deepEqual(cleanMeasurements(undefined, [groundLevel]), []);
+});
+
+
+test('printable plan frames thick walls and distant measurements independently of screen extent', () => {
+  const wall = { type: 'wall', x: 100, y: 100, x2: 110, y2: 100, thickness: 4 };
+  const [left, top, width, height] = planView([wall], [{ x: 115, y: 99, x2: 120, y2: 97 }], 40);
+  assert.ok(left < 100 * 40 && left + width > 120 * 40);
+  assert.ok(top < 97 * 40 && top + height > 102 * 40);
+  assert.ok(Math.abs(width / height - 12 / 7) < 1e-12);
+  assert.deepEqual(planView([], [], 40), [0, 0, 1200, 700]);
 });

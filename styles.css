@@ -48,3 +48,15 @@ button:disabled{opacity:.55;cursor:default}
 #measurementMarks{pointer-events:none}
 #measurementMarks line{stroke:#855a17;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}
 #measurementForm{max-width:36rem}
+
+#measurementMarks text{font:14px Tahoma,Arial,sans-serif;fill:#694407;stroke:white;stroke-width:3px;paint-order:stroke;stroke-linejoin:round}
+#printSheet{display:none}
+@media print{
+  @page{size:A4 landscape;margin:12mm}
+  body>:not(#printSheet){display:none}
+  body{background:white}
+  #printSheet{display:block;color:#15372e}
+  #printSheet h1{font-size:16pt;margin:0 0 2mm}
+  #printSheet p{font-size:9pt;margin:0 0 4mm}
+  #printSheet svg{display:block;width:100%;height:auto;max-height:154mm}
+}
