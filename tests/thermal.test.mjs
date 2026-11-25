@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, evaluateAssembly, evaluateEnvelopeElement,
-  evaluateEnvelopeOpening } from '../thermal.js';
+  evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission } from '../thermal.js';
 
 const assembly = cleanAssembly({
   id: 'wall-1', kind: 'wall', name: 'جدار الاختبار', inside: .13, outside: .04,
@@ -52,4 +52,29 @@ test('assigned envelope elements use opaque areas after their openings are remov
   near(evaluateEnvelopeElement(wall, assemblies).conductance, 13 / 1.92);
   near(evaluateEnvelopeElement(slab, assemblies).conductance, 18 / 1.92);
   assert.equal(evaluateEnvelopeElement({ ...wall, thermalId:'roof' }, assemblies), null);
+});
+
+const design = { indoorC: 24, outdoorC: 44, reference: 'حالة اختبار' };
+
+test('steady-state transmission uses the signed temperature difference for each known element', () => {
+  assert.deepEqual(evaluateTransmission(design, [6.25, 1.5]), {
+    deltaK: -20, watts: [-125, -30], totalW: -155,
+  });
+  assert.deepEqual(evaluateTransmission({ ...design, outdoorC: -6 }, [6.25, 1.5]), {
+    deltaK: 30, watts: [187.5, 45], totalW: 232.5,
+  });
+  assert.deepEqual(evaluateTransmission({ ...design, indoorC: 0, outdoorC: 0 }, [2]), {
+    deltaK: 0, watts: [0], totalW: 0,
+  });
+});
+
+test('a design scenario rejects missing data, invalid temperatures, and nonfinite results', () => {
+  assert.deepEqual(cleanTransmissionScenario({ ...design, reference: '  حالة اختبار  ' }), design);
+  for (const input of [null, { ...design, indoorC: null }, { ...design, outdoorC: '0' },
+    { ...design, outdoorC: -274 }, { ...design, reference: ' ' }]) {
+    assert.equal(evaluateTransmission(input, [5]), null);
+  }
+  for (const conductances of [[], [-1, 5], [Number.MAX_VALUE], [NaN]]) {
+    assert.equal(evaluateTransmission(design, conductances), null);
+  }
 });

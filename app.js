@@ -1,6 +1,6 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
-  evaluateEnvelopeElement, evaluateEnvelopeOpening, thermalKinds } from './thermal.js';
+  evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
@@ -356,7 +356,7 @@ $('editRoom').onclick = () => {
   $('mode').textContent = current.type === 'slab' ? 'حُدّثت البلاطة المحددة.' : 'حُدّثت المساحة المحددة.';
   render();
 };
-$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
+$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());loadTransmissionForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());loadTransmissionForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
 function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('exportSVG').onclick=()=>dl('hayyanarsum.svg',new XMLSerializer().serializeToString($('svg')),'image/svg+xml');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 const csvCell = value => {
   const raw = String(value);
@@ -551,15 +551,62 @@ $('elementThermal').onchange = event => {
   renderThermalAssignment();
   renderEnvelope();
 };
+const transmissionFor = (rows, design = S.project.transmission) =>
+  evaluateTransmission(design, rows.map(row => row.conductance));
+const transmissionDirection = deltaK => deltaK > 0 ? 'فقد إلى الخارج' : deltaK < 0 ? 'اكتساب من الخارج' : 'درجتان متساويتان';
+
+function loadTransmissionForm() {
+  const design = S.project.transmission;
+  $('indoorC').value = design?.indoorC ?? '';
+  $('outdoorC').value = design?.outdoorC ?? '';
+  $('temperatureReference').value = design?.reference ?? '';
+  $('transmissionStatus').textContent = '';
+}
+
+function saveTransmission(design) {
+  commit();
+  S.project.transmission = design;
+  loadTransmissionForm();
+  renderEnvelope();
+  try {
+    localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
+    $('transmissionStatus').textContent = design ? 'حُفظت درجات التصميم.' : 'حُذفت درجات التصميم.';
+  } catch {
+    $('transmissionStatus').textContent = 'تعذّر الحفظ المحلي. يمكنك حفظ التغييرات بتصدير ملف المشروع.';
+  }
+}
+
+$('transmissionForm').onsubmit = event => {
+  event.preventDefault();
+  const design = cleanTransmissionScenario({
+    indoorC: $('indoorC').valueAsNumber, outdoorC: $('outdoorC').valueAsNumber,
+    reference: $('temperatureReference').value,
+  });
+  if (!design || !transmissionFor(envelopeResults(), design)) {
+    $('transmissionStatus').textContent = 'تحقق من درجات التصميم ومرجعها وتوافر نتائج للعناصر.';
+    return;
+  }
+  saveTransmission(design);
+};
+$('clearTransmission').onclick = () => saveTransmission(null);
+
 function renderEnvelope() {
   const results = envelopeResults();
   $('envelopePanel').hidden = !results.length;
   const rows = $('envelopeRows');
   rows.replaceChildren();
-  for (const entry of results) {
+  const transmission = transmissionFor(results);
+  $('transmissionColumn').hidden = !transmission;
+  $('clearTransmission').disabled = !S.project.transmission;
+  $('transmissionResult').textContent = transmission
+    ? transmissionDirection(transmission.deltaK) + ' · فرق الحرارة: ' + thermalLabel(Math.abs(transmission.deltaK)) +
+      ' K · مجموع العناصر المعروضة: ' + thermalLabel(Math.abs(transmission.totalW)) + ' W'
+    : '';
+  for (const [index, entry] of results.entries()) {
     const row = rows.insertRow();
     for (const value of [entry.name, entry.reference, thermalLabel(entry.area),
       thermalLabel(entry.transmittance), thermalLabel(entry.conductance)]) row.insertCell().textContent = value;
+    if (transmission) row.insertCell().textContent = thermalLabel(Math.abs(transmission.watts[index]));
   }
   const solid = conductanceSum(results, 'opaque');
   const openings = conductanceSum(results, 'opening');
@@ -759,12 +806,27 @@ $('exportSaudiReview').onclick = () => {
   }
   const envelope = envelopeResults();
   if (envelope.length) {
-    rows.push([], ['عنصر الغلاف', 'التجميعة أو مرجع المنتج', 'المساحة المحسوبة (م²)', 'U (W/m²·K)', 'U × A (W/K)']);
-    for (const entry of envelope) rows.push([entry.name, entry.reference, entry.area, entry.transmittance, entry.conductance]);
+    const transmission = transmissionFor(envelope);
+    const headers = ['عنصر الغلاف', 'التجميعة أو مرجع المنتج', 'المساحة المحسوبة (م²)', 'U (W/m²·K)', 'U × A (W/K)'];
+    if (transmission) headers.push('انتقال الحرارة (W)');
+    rows.push([], headers);
+    for (const [index, entry] of envelope.entries()) {
+      const row = [entry.name, entry.reference, entry.area, entry.transmittance, entry.conductance];
+      if (transmission) row.push(Math.abs(transmission.watts[index]));
+      rows.push(row);
+    }
     const solid = conductanceSum(envelope, 'opaque');
     const openings = conductanceSum(envelope, 'opening');
     rows.push(['مجموع الأجزاء المصمتة', '', '', '', solid], ['مجموع الأبواب والنوافذ ذات البيانات', '', '', '', openings],
       ['مجموع العناصر المحسوبة', '', '', '', solid + openings]);
+    if (transmission) {
+      const { indoorC, outdoorC, reference } = S.project.transmission;
+      rows.push([], ['درجة التصميم الداخلية (°C)', indoorC], ['درجة التصميم الخارجية (°C)', outdoorC],
+        ['مرجع درجات التصميم', reference], ['فرق الحرارة (K)', Math.abs(transmission.deltaK)],
+        ['اتجاه الانتقال', transmissionDirection(transmission.deltaK)],
+        ['مجموع انتقال الحرارة للعناصر المعروضة (W)', Math.abs(transmission.totalW)],
+        ['نطاق الحساب', $('transmissionScope').textContent]);
+    }
   }
   dl('hayyanarsum-saudi-review.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
@@ -813,6 +875,7 @@ function readProject(data) {
   const project = {};
   project.saudi = cleanSaudiInputs(data.project?.saudi);
   project.thermal = cleanThermalAssemblies(data.project?.thermal);
+  project.transmission = cleanTransmissionScenario(data.project?.transmission);
   for (const key of ['name','city','revision','description']) {
     if (typeof data.project?.[key] === 'string') project[key] = data.project[key].slice(0, 4000);
   }
@@ -831,6 +894,7 @@ function loadProjectFields() {
   document.querySelectorAll('[data-tool]').forEach(button => button.classList.toggle('active', button.dataset.tool === S.tool));
   loadSaudiFields();
   loadThermalForm(thermalList()[0]?.id);
+  loadTransmissionForm();
 }
 function loadSaudiFields() {
   const saved = cleanSaudiInputs(S.project.saudi);

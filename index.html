@@ -97,7 +97,20 @@
   <section id="thermalResult" aria-live="polite"></section>
   <section id="envelopePanel" hidden><h3>انتقال الحرارة للعناصر المرتبطة</h3>
     <p id="envelopeTotal"></p>
-    <div class="table"><table><thead><tr><th>العنصر</th><th>التجميعة أو المرجع</th><th>المساحة المحسوبة (م²)</th><th>U (W/m²·K)</th><th>U × A (W/K)</th></tr></thead><tbody id="envelopeRows"></tbody></table></div>
+    <form id="transmissionForm" class="review-fields">
+      <h4>انتقال الحرارة عند درجات تصميم محددة</h4>
+      <div class="two">
+        <label>درجة الحرارة الداخلية (°C)<input id="indoorC" type="number" min="-273.15" step="any" required></label>
+        <label>درجة الحرارة الخارجية (°C)<input id="outdoorC" type="number" min="-273.15" step="any" required></label>
+      </div>
+      <label>مرجع درجات التصميم<input id="temperatureReference" maxlength="300" required></label>
+      <button type="submit">حساب وحفظ درجات التصميم</button>
+      <button id="clearTransmission" type="button">حذف درجات التصميم</button>
+      <p class="muted" id="transmissionScope">تقدير ساكن للعناصر المعروضة عند درجتين موحّدتين. يُستثنى أثر الشمس والتهوية وتسرّب الهواء والجسور الحرارية. يلزم تحليل مستقل لاختيار أجهزة التكييف ومراجعة الامتثال.</p>
+      <p id="transmissionStatus" role="status"></p>
+    </form>
+    <p id="transmissionResult" aria-live="polite"></p>
+    <div class="table"><table><thead><tr><th>العنصر</th><th>التجميعة أو المرجع</th><th>المساحة المحسوبة (م²)</th><th>U (W/m²·K)</th><th>U × A (W/K)</th><th id="transmissionColumn" hidden>انتقال الحرارة (W)</th></tr></thead><tbody id="envelopeRows"></tbody></table></div>
   </section>
   <p class="muted">الحساب يخص الجزء المصمت. الجسور الحرارية والنوافذ وتسرب الهواء تحتاج نماذج منفصلة.</p>
 </details>

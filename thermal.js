@@ -80,3 +80,23 @@ export function evaluateEnvelopeOpening(opening) {
   if (!Number.isFinite(conductance) || !positive(area)) return null;
   return { area, transmittance: opening.thermalU, conductance, reference: opening.thermalRef.trim() };
 }
+
+export const minimumTemperatureC = -273.15;
+
+export function cleanTransmissionScenario(input) {
+  const { indoorC, outdoorC } = input ?? {};
+  const reference = text(input?.reference, 300);
+  if (!Number.isFinite(indoorC) || !Number.isFinite(outdoorC) ||
+      indoorC < minimumTemperatureC || outdoorC < minimumTemperatureC || !reference) return null;
+  return { indoorC, outdoorC, reference };
+}
+
+export function evaluateTransmission(scenario, conductances) {
+  const input = cleanTransmissionScenario(scenario);
+  if (!input || !conductances.length) return null;
+  const deltaK = input.indoorC - input.outdoorC;
+  const watts = conductances.map(value => Number.isFinite(value) && value >= 0 ? value * deltaK : NaN);
+  const totalW = watts.reduce((sum, value) => sum + value, 0);
+  if (!Number.isFinite(totalW)) return null;
+  return { deltaK, watts, totalW };
+}
