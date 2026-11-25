@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readDxf } from '../dxf-import.js';
-import { dxf, length, wallFromCadLine, wallQuantities } from '../engine.js';
+import { dxf, length, nearestCadEndpoint, wallFromCadLine, wallQuantities } from '../engine.js';
 
 const drawing = (entities, unit = '6') => [
   '0', 'SECTION', '2', 'HEADER', ...(unit === '' ? [] : ['9', '$INSUNITS', '70', unit]),
@@ -56,4 +56,15 @@ test('an imported CAD segment becomes a wall at its metric coordinates only afte
   });
   assert.ok(Math.abs(wallQuantities(wall).netVolume - 1.5) < 1e-10);
   assert.equal(reference.type, 'cadLine');
+});
+
+
+test('endpoint snapping returns exact imported coordinates only within the configured pick distance', () => {
+  const source = readDxf(drawing(line, '4')).lines[0];
+  const shorter = { ...source, x: 1.137, y: -2.065 };
+  const nearbyWall = { ...shorter, type: 'wall', x: 1.15, y: -2.06 };
+  const shapes = [source, shorter, nearbyWall];
+  assert.deepEqual(nearestCadEndpoint({ x: 1.15, y: -2.06 }, shapes, .2), { x: 1.137, y: -2.065 });
+  assert.deepEqual(nearestCadEndpoint({ x: 2.49, y: -3.99 }, shapes, .05), { x: 2.5, y: -4 });
+  assert.equal(nearestCadEndpoint({ x: 1.15, y: -2.06 }, shapes, .005), null);
 });

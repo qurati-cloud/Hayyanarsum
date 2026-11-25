@@ -1,4 +1,19 @@
 export const snap = (value, step = 0.5) => Math.round(value / step) * step;
+export function nearestCadEndpoint(point, shapes, radius) {
+  let nearest = null;
+  let shortest = radius ** 2;
+  for (const shape of shapes) {
+    if (shape.type !== 'cadLine') continue;
+    for (const [x, y] of [[shape.x, shape.y], [shape.x2, shape.y2]]) {
+      const distance = (x - point.x) ** 2 + (y - point.y) ** 2;
+      if (distance > shortest || (nearest && distance === shortest)) continue;
+      shortest = distance;
+      nearest = { x, y };
+    }
+  }
+  return nearest;
+}
+
 export const area = shape => shape.type === 'room' ? shape.w * shape.h : 0;
 export const slabArea = shape => shape.w * shape.h;
 export const slabOpeningArea = shape => (shape.cutouts ?? []).reduce((sum, cut) => sum + cut.w * cut.h, 0);

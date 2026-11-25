@@ -41,4 +41,6 @@ button:disabled{opacity:.55;cursor:default}
 }
 
 #shapeSize[hidden],#wallSize[hidden]{display:none}
-#fitDrawing.active{background:var(--sand);border-color:var(--gold)}
+#fitDrawing.active,#snapCadEndpoints[aria-pressed="true"]{background:var(--sand);border-color:var(--gold)}
+
+.bar{flex-wrap:wrap;gap:6px}
