@@ -1,5 +1,5 @@
 import { elementLevel, length, slabArea, slabNetArea, slabVolume, valid, validateLevels, wallQuantities } from './engine.js';
-import { evaluateEnvelopeElement } from './thermal.js';
+import { evaluateEnvelopeElement, evaluateEnvelopeOpening } from './thermal.js';
 
 const ifcAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 const missing = '$';
@@ -107,8 +107,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
     entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([reference]), set);
   }
   let thermalUnit;
-  function addThermalProperty(shape, ref, propertySetName) {
-    const result = evaluateEnvelopeElement(shape, assemblyIndex);
+  function addThermalProperty(result, ref, propertySetName) {
     if (!result) return;
     if (!thermalUnit) {
       const dimensions = [
@@ -119,7 +118,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
         entity('IFCSIUNIT', '*', type, missing, name), exponent));
       thermalUnit = entity('IFCDERIVEDUNIT', tuple(dimensions), '.THERMALTRANSMITTANCEUNIT.', missing);
     }
-    const prop = entity('IFCPROPERTYSINGLEVALUE', "'ThermalTransmittance'", stepString(result.assembly.name),
+    const prop = entity('IFCPROPERTYSINGLEVALUE', "'ThermalTransmittance'", stepString(result.assembly?.name ?? result.reference),
       'IFCTHERMALTRANSMITTANCEMEASURE(' + real(result.transmittance) + ')', thermalUnit);
     const set = entity('IFCPROPERTYSET', ...root(propertySetName), tuple([prop]));
     entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([ref]), set);
@@ -138,7 +137,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
       box(width, wall.thickness, wall.z), stepString(wall.id || ''), '.NOTDEFINED.');
     storey.contained.push(wallRef);
     quantities(wall, wallRef, width);
-    addThermalProperty(wall, wallRef, 'Pset_WallCommon');
+    addThermalProperty(evaluateEnvelopeElement(wall, assemblyIndex), wallRef, 'Pset_WallCommon');
     for (const opening of wall.openings) {
       const isDoor = opening.kind === 'door';
       const label = isDoor ? 'Door' : 'Window';
@@ -151,6 +150,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
       const fill = entity(isDoor ? 'IFCDOOR' : 'IFCWINDOW', ...root(label), missing, fillPose,
         missing, missing, real(opening.height), real(opening.width), isDoor ? '.DOOR.' : '.WINDOW.', '.NOTDEFINED.', missing);
       entity('IFCRELFILLSELEMENT', ...root(''), voidRef, fill);
+      addThermalProperty(evaluateEnvelopeOpening(opening), fill, isDoor ? 'Pset_DoorCommon' : 'Pset_WindowCommon');
       storey.contained.push(fill);
     }
   }
@@ -175,7 +175,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
     ].map(([type, label, value]) => entity('IFCQUANTITY' + type, stepString(label), missing, missing, real(value), missing));
     const set = entity('IFCELEMENTQUANTITY', ...root('Qto_SlabBaseQuantities'), missing, tuple(measures));
     entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([ref]), set);
-    addThermalProperty(slab, ref, 'Pset_SlabCommon');
+    addThermalProperty(evaluateEnvelopeElement(slab, assemblyIndex), ref, 'Pset_SlabCommon');
   }
   for (const { ref, contained } of spatial.values()) {
     if (contained.length) entity('IFCRELCONTAINEDINSPATIALSTRUCTURE', ...root(''), tuple(contained), ref);

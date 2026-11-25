@@ -70,3 +70,13 @@ export function evaluateEnvelopeElement(shape, assemblies) {
   if (!Number.isFinite(conductance)) return null;
   return { assembly, area, transmittance: result.transmittance, conductance };
 }
+
+export function evaluateEnvelopeOpening(opening) {
+  if (!['door', 'window'].includes(opening.kind) || !positive(opening.thermalU) ||
+      typeof opening.thermalRef !== 'string' || !opening.thermalRef.trim() ||
+      !positive(opening.width) || !positive(opening.height)) return null;
+  const area = opening.width * opening.height;
+  const conductance = area * opening.thermalU;
+  if (!Number.isFinite(conductance) || !positive(area)) return null;
+  return { area, transmittance: opening.thermalU, conductance, reference: opening.thermalRef.trim() };
+}

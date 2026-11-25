@@ -1,6 +1,6 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
-  evaluateEnvelopeElement, thermalKinds } from './thermal.js';
+  evaluateEnvelopeElement, evaluateEnvelopeOpening, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
@@ -235,6 +235,8 @@ function loadOpeningFields() {
   const opening = selectedWall()?.openings?.[$('openingIndex').value];
   $('openingKind').value = opening?.kind ?? 'door';
   for (const [key, id] of Object.entries(openingFields)) $(id).value = opening?.[key] ?? '';
+  $('openingThermalU').value = opening?.thermalU ?? '';
+  $('openingThermalRef').value = opening?.thermalRef ?? '';
   $('openingRemove').disabled = !opening;
   configureOpeningSill();
 }
@@ -311,7 +313,17 @@ $('openingApply').onclick = () => {
   const openings = [...wall.openings];
   const index = value === '' ? openings.length : Number(value);
   const values = Object.fromEntries(Object.entries(openingFields).map(([key, id]) => [key, numberField(id)]));
-  openings[index] = { ...values, kind: $('openingKind').value };
+  const opening = { ...values, kind: $('openingKind').value };
+  const thermalU = $('openingThermalU').valueAsNumber;
+  const thermalRef = $('openingThermalRef').value.trim().slice(0, 180);
+  if ($('openingThermalU').value !== '' || thermalRef) {
+    Object.assign(opening, { thermalU, thermalRef });
+    if (!evaluateEnvelopeOpening(opening)) {
+      $('wallStatus').textContent = 'أدخل معامل U موجبًا ومرجع المنتج مع أبعاد الفتحة، أو اترك بيانات العزل فارغة.';
+      return;
+    }
+  }
+  openings[index] = opening;
   if (saveWall({ ...wall, openings }, 'حُفظت الفتحة.')) {
     $('openingIndex').value = String(index);
     loadOpeningFields();
@@ -503,9 +515,18 @@ function envelopeResults() {
   const assemblies = new Map(thermalList().map(assembly => [assembly.id, assembly]));
   return S.shapes.flatMap(shape => {
     const result = evaluateEnvelopeElement(shape, assemblies);
-    return result ? [{ shape, ...result }] : [];
+    const name = itemLabel(shape);
+    const rows = result ? [{ ...result, name, reference: result.assembly.name, kind: 'opaque' }] : [];
+    if (shape.type === 'wall') {
+      for (const [index, opening] of (shape.openings ?? []).entries()) {
+        const thermal = evaluateEnvelopeOpening(opening);
+        if (thermal) rows.push({ ...thermal, name: name + ' · ' + openingLabel(opening.kind) + ' ' + (index + 1), kind: 'opening' });
+      }
+    }
+    return rows;
   });
 }
+const conductanceSum = (rows, kind) => rows.reduce((sum, row) => sum + (row.kind === kind ? row.conductance : 0), 0);
 
 function renderThermalAssignment() {
   const shape = selectedThermalElement();
@@ -537,12 +558,14 @@ function renderEnvelope() {
   rows.replaceChildren();
   for (const entry of results) {
     const row = rows.insertRow();
-    for (const value of [itemLabel(entry.shape), entry.assembly.name, thermalLabel(entry.area),
+    for (const value of [entry.name, entry.reference, thermalLabel(entry.area),
       thermalLabel(entry.transmittance), thermalLabel(entry.conductance)]) row.insertCell().textContent = value;
   }
-  const total = results.reduce((sum, entry) => sum + entry.conductance, 0);
-  $('envelopeTotal').textContent = 'مجموع U × A للأجزاء المصمتة المرتبطة: ' + thermalLabel(total) +
-    ' W/K. تُخصم الفتحات من المساحة. يتطلب تقدير حمل المبنى بقية مكونات الغلاف والتهوية والمناخ.';
+  const solid = conductanceSum(results, 'opaque');
+  const openings = conductanceSum(results, 'opening');
+  $('envelopeTotal').textContent = 'الأجزاء المصمتة: ' + thermalLabel(solid) + ' W/K · الأبواب والنوافذ ذات البيانات: ' +
+    thermalLabel(openings) + ' W/K · مجموع العناصر المحسوبة: ' + thermalLabel(solid + openings) +
+    ' W/K. تُخصم الفتحات من مساحة الجدار. يتطلب حمل المبنى بيانات الغلاف الكاملة والتهوية والمناخ.';
 }
 function thermalComparisonText(assembly, city) {
   const comparison = compareAssembly(assembly, city);
@@ -736,9 +759,12 @@ $('exportSaudiReview').onclick = () => {
   }
   const envelope = envelopeResults();
   if (envelope.length) {
-    rows.push([], ['عنصر الغلاف', 'تجميعة العزل', 'المساحة المصمتة (م²)', 'U (W/m²·K)', 'U × A (W/K)']);
-    for (const entry of envelope) rows.push([itemLabel(entry.shape), entry.assembly.name, entry.area, entry.transmittance, entry.conductance]);
-    rows.push(['المجموع للعناصر المرتبطة', '', '', '', envelope.reduce((sum, entry) => sum + entry.conductance, 0)]);
+    rows.push([], ['عنصر الغلاف', 'التجميعة أو مرجع المنتج', 'المساحة المحسوبة (م²)', 'U (W/m²·K)', 'U × A (W/K)']);
+    for (const entry of envelope) rows.push([entry.name, entry.reference, entry.area, entry.transmittance, entry.conductance]);
+    const solid = conductanceSum(envelope, 'opaque');
+    const openings = conductanceSum(envelope, 'opening');
+    rows.push(['مجموع الأجزاء المصمتة', '', '', '', solid], ['مجموع الأبواب والنوافذ ذات البيانات', '', '', '', openings],
+      ['مجموع العناصر المحسوبة', '', '', '', solid + openings]);
   }
   dl('hayyanarsum-saudi-review.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
@@ -777,7 +803,12 @@ function readProject(data) {
       ...(type === 'room' ? residentialRoomMetadata(shape.roomUse, shape.clearRoom) : {}),
       cutouts: type === 'slab' ? cutouts?.map(cut => ({ x: cut.x, y: cut.y, w: cut.w, h: cut.h, name: cut.name.trim().slice(0, 120) })) : undefined }
       : { id, type, name: name.slice(0, 160), layer, levelId, x, y, x2, y2, z, thickness, thermalId,
-          openings: openings?.map(({ kind, offset, width, sill, height }) => ({ kind, offset, width, sill, height })) };
+          openings: openings?.map(opening => {
+            const { kind, offset, width, sill, height } = opening;
+            const thermal = evaluateEnvelopeOpening(opening);
+            return { kind, offset, width, sill, height,
+              ...(thermal ? { thermalU: thermal.transmittance, thermalRef: thermal.reference.slice(0, 180) } : {}) };
+          }) };
   });
   const project = {};
   project.saudi = cleanSaudiInputs(data.project?.saudi);

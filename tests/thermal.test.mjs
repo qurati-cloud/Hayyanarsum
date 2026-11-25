@@ -1,12 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanAssembly, cleanThermalAssemblies, compareAssembly, evaluateAssembly, evaluateEnvelopeElement } from '../thermal.js';
+import { cleanAssembly, cleanThermalAssemblies, compareAssembly, evaluateAssembly, evaluateEnvelopeElement,
+  evaluateEnvelopeOpening } from '../thermal.js';
 
 const assembly = cleanAssembly({
   id: 'wall-1', kind: 'wall', name: 'جدار الاختبار', inside: .13, outside: .04,
   layers: [{ name:'طبقة 1', mm:100, conductivity:.2 }, { name:'طبقة 2', mm:50, conductivity:.04 }],
 });
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12);
+
+test('an opening contributes its documented whole-product U value over its modeled area', () => {
+  const opening = { kind:'window', width:1.2, height:1.5, thermalU:1.5, thermalRef:'نشرة المنتج' };
+  const result = evaluateEnvelopeOpening(opening);
+  near(result.area, 1.8);
+  near(result.conductance, 2.7);
+  assert.equal(evaluateEnvelopeOpening({ ...opening, thermalRef:'' }), null);
+  assert.equal(evaluateEnvelopeOpening({ ...opening, thermalU:0 }), null);
+});
 
 test('homogeneous layers convert millimetres to metres and include both surface resistances', () => {
   const result = evaluateAssembly(assembly);

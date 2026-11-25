@@ -47,6 +47,14 @@ def validate_export():
         assert math.isclose(pose[1, 3], -2 - 0.8 * offset)
         assert math.isclose(pose[2, 3], 3.25 + sill)
         assert (filling.OverallWidth, filling.OverallHeight) == (1, height)
+        is_door = filling.is_a("IfcDoor")
+        pset_name = "Pset_DoorCommon" if is_door else "Pset_WindowCommon"
+        pset, = [rel.RelatingPropertyDefinition for rel in filling.IsDefinedBy if rel.RelatingPropertyDefinition.Name == pset_name]
+        property_u, = pset.HasProperties
+        assert property_u.Name == "ThermalTransmittance"
+        assert property_u.Unit.UnitType == "THERMALTRANSMITTANCEUNIT"
+        assert property_u.NominalValue.wrappedValue == (2 if is_door else 1.5)
+        assert property_u.Description == ("نشرة الباب" if is_door else "نشرة النافذة")
         assert not opening.ContainedInStructure
         assert filling.ContainedInStructure[0].RelatingStructure == wall.ContainedInStructure[0].RelatingStructure
     assert not expected

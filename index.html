@@ -38,6 +38,11 @@
     <label>النوع<select id="openingKind"><option value="door">باب</option><option value="window">نافذة</option></select></label>
     <div class="two"><label>البعد من البداية (م)<input id="openingOffset" type="number" step="any"></label><label>العرض (م)<input id="openingWidth" type="number" step="any"></label></div>
     <div class="two"><label>منسوب أسفل الفتحة (م)<input id="openingSill" type="number" step="any"></label><label>ارتفاع الفتحة (م)<input id="openingHeight" type="number" step="any"></label></div>
+    <fieldset class="review-fields">
+      <legend>الأداء الحراري للباب أو النافذة الخارجية</legend>
+      <label>معامل U للمنتج كاملًا (W/m²·K)<input id="openingThermalU" type="number" min="0" step="any"></label>
+      <label>مرجع بيانات المنتج<input id="openingThermalRef" maxlength="180"></label>
+    </fieldset>
     <button id="openingApply" class="primary">حفظ الفتحة</button>
     <button id="openingRemove" class="danger">حذف الفتحة المحددة</button>
   </div>
@@ -92,7 +97,7 @@
   <section id="thermalResult" aria-live="polite"></section>
   <section id="envelopePanel" hidden><h3>انتقال الحرارة للعناصر المرتبطة</h3>
     <p id="envelopeTotal"></p>
-    <div class="table"><table><thead><tr><th>العنصر</th><th>التجميعة</th><th>المساحة المصمتة (م²)</th><th>U (W/m²·K)</th><th>U × A (W/K)</th></tr></thead><tbody id="envelopeRows"></tbody></table></div>
+    <div class="table"><table><thead><tr><th>العنصر</th><th>التجميعة أو المرجع</th><th>المساحة المحسوبة (م²)</th><th>U (W/m²·K)</th><th>U × A (W/K)</th></tr></thead><tbody id="envelopeRows"></tbody></table></div>
   </section>
   <p class="muted">الحساب يخص الجزء المصمت. الجسور الحرارية والنوافذ وتسرب الهواء تحتاج نماذج منفصلة.</p>
 </details>
