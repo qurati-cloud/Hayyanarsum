@@ -39,3 +39,6 @@ button:disabled{opacity:.55;cursor:default}
   nav{width:100%;order:2}
   nav button{padding:8px}
 }
+
+#shapeSize[hidden],#wallSize[hidden]{display:none}
+#fitDrawing.active{background:var(--sand);border-color:var(--gold)}

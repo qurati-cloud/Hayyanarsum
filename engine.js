@@ -4,7 +4,8 @@ export const slabArea = shape => shape.w * shape.h;
 export const slabOpeningArea = shape => (shape.cutouts ?? []).reduce((sum, cut) => sum + cut.w * cut.h, 0);
 export const slabNetArea = shape => Math.max(0, slabArea(shape) - slabOpeningArea(shape));
 export const slabVolume = shape => slabNetArea(shape) * shape.z;
-export const length = shape => shape.type === 'wall' ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
+export const isLinear = shape => shape?.type === 'wall' || shape?.type === 'cadLine';
+export const length = shape => isLinear(shape) ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
 export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
 
 export const groundLevel = Object.freeze({ id: 'ground', name: 'الطابق الأرضي', elevation: 0 });
@@ -182,10 +183,12 @@ export function roomProjection(shapes, degrees, levels = [groundLevel]) {
 }
 
 export function valid(shape) {
-  if (!shape || !['room', 'wall', 'slab'].includes(shape.type)) return false;
-  const values = shape.type !== 'wall'
+  if (!shape || !['room', 'wall', 'slab', 'cadLine'].includes(shape.type)) return false;
+  const values = !isLinear(shape)
     ? [shape.x, shape.y, shape.w, shape.h, shape.x + shape.w, shape.y + shape.h, shape.w * shape.h]
     : [shape.x, shape.y, shape.x2, shape.y2, length(shape)];
+  if (shape.type === 'cadLine') return values.every(Number.isFinite) && length(shape) > 0 &&
+    values.slice(0, 4).every(value => Math.abs(value) <= 1e9);
   return values.every(Number.isFinite) &&
     (shape.type === 'wall' ? length(shape) > 0 && validWallDetails(shape)
       : shape.w > 0 && shape.h > 0 && (shape.type === 'slab'
@@ -471,6 +474,11 @@ export function dxf(shapes) {
     if (!valid(shape)) throw new TypeError('Invalid geometry');
     const layer = /^[A-Z0-9_-]{1,40}$/.test(shape.layer) ? shape.layer : '0';
     const { x, y, w, h } = shape;
+    if (shape.type === 'cadLine') {
+      const sourceLayer = /^[A-Za-z0-9_.-]{1,160}$/.test(shape.cadLayer) ? shape.cadLayer : layer;
+      line(x, y, shape.x2, shape.y2, sourceLayer);
+      continue;
+    }
     if (shape.type === 'wall') {
       if (shape.thickness == null) {
         line(x, y, shape.x2, shape.y2, layer);
