@@ -58,3 +58,16 @@ test('mixed-use rooms advance rows by the deepest previous room', async () => {
   assert.equal(customRoomBlockPlan({ ...brief, bedrooms: 0 }, layout, withBedroom).error, 'bedroom-count');
   assert.equal(customRoomBlockPlan({ ...brief, bedrooms: 1 }, layout, withBedroom).rooms.length, 4);
 });
+
+test('explicit room lines populate types and metric dimensions while leaving missing or conflicting sizes blank', async () => {
+  const { extractBriefRooms } = await import('../project-brief.js');
+  const rooms = extractBriefRooms('عرض الأرض: ٢٠ م\nمجلس: ٤٫٥ × ٦ م\nمطبخ:\nBedroom 2: 3 x 4 m\nCuisine: 2,5 par 3 mètres\nحمام: ٢ × ٢ م\nحمام: ٢ × ٣ م\nCorridor: 5 x 6 ft');
+  assert.deepEqual(rooms, [
+    { name: 'مجلس', roomUse: 'living', w: 4.5, h: 6 },
+    { name: 'مطبخ', roomUse: 'kitchen', w: null, h: null },
+    { name: 'Bedroom 2', roomUse: 'bedroom', w: 3, h: 4 },
+    { name: 'Cuisine', roomUse: 'kitchen', w: 2.5, h: 3 },
+    { name: 'حمام', roomUse: 'bathroom', w: null, h: null },
+    { name: 'Corridor', roomUse: 'corridor', w: null, h: null },
+  ]);
+});

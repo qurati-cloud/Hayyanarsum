@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, extractBrief, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, cleanBriefRooms, extractBrief, extractBriefRooms, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1194,6 +1194,7 @@ const briefReview = $('briefReviewForm');
 const briefField = key => briefReview.elements.namedItem(key);
 let briefConflicts = [];
 const manuallyEditedBriefFields = new Set();
+let manuallyEditedBriefRooms = false;
 function readBriefFields() {
   return cleanBrief(Object.fromEntries(Object.keys(briefFields).map(key => {
     const field = briefField(key);
@@ -1212,6 +1213,13 @@ function loadBriefForm() {
   const saved = S.project.brief ?? {};
   $('briefDescription').value = saved.description ?? '';
   for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
+  const rooms = saved.rooms ?? [];
+  $('briefRoomList').replaceChildren();
+  for (const room of rooms) addBriefRoom(room);
+  $('briefLayoutMode').value = rooms.length ? 'custom' : 'bedrooms';
+  manuallyEditedBriefRooms = rooms.length > 0;
+  $('briefAddRoom').disabled = rooms.length >= 100;
+  updateBriefLayoutMode();
   briefConflicts = [];
   manuallyEditedBriefFields.clear();
   $('briefStatus').textContent = '';
@@ -1220,7 +1228,15 @@ function loadBriefForm() {
 }
 $('briefExtractForm').onsubmit = event => {
   event.preventDefault();
-  const { data, conflicts } = extractBrief($('briefDescription').value);
+  const description = $('briefDescription').value;
+  const { data, conflicts } = extractBrief(description);
+  const rooms = extractBriefRooms(description);
+  if (rooms.length && !manuallyEditedBriefRooms) {
+    $('briefRoomList').replaceChildren();
+    for (const room of rooms) addBriefRoom(room);
+    $('briefLayoutMode').value = 'custom';
+    updateBriefLayoutMode();
+  }
   briefConflicts = conflicts;
   clearBriefPlan();
   for (const key of Object.keys(briefFields)) {
@@ -1228,7 +1244,11 @@ $('briefExtractForm').onsubmit = event => {
   }
   renderBriefQuestions();
   const missing = missingBriefFields(readBriefFields()).length;
-  $('briefStatus').textContent = missing ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المسودة الأولية. راجعها قبل الحفظ.';
+  const summary = missing ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المشروع الأولية. راجعها قبل الحفظ.';
+  const incomplete = rooms.filter(room => !room.w || !room.h).length;
+  $('briefStatus').textContent = summary + (!rooms.length ? '' : manuallyEditedBriefRooms
+    ? ' احتُفظ بقائمة الفراغات التي عدّلتها أو حفظتها.'
+    : ' أُضيفت الفراغات المذكورة إلى المعاينة.' + (incomplete ? ' راجع الأبعاد الناقصة أو المتعارضة في ' + incomplete + ' من الفراغات.' : ''));
 };
 briefReview.oninput = event => {
   const key = event.target.name;
@@ -1250,7 +1270,7 @@ briefReview.onsubmit = event => {
     }
   }
   commit();
-  S.project.brief = { description: $('briefDescription').value.trim(), fields };
+  S.project.brief = { description: $('briefDescription').value.trim(), fields, rooms: cleanBriefRooms(briefCustomRooms()) };
   try {
     localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
     $('briefStatus').textContent = 'حُفظت المسودة في المشروع على هذا الجهاز.';
@@ -1294,7 +1314,7 @@ function drawBriefPreview(plan) {
 }
 
 const briefTargetIsEmpty = () => levelShapes().length === 0 && levelMeasurements().length === 0;
-function addBriefRoom() {
+function addBriefRoom(room = {}) {
   const list = $('briefRoomList');
   if (list.children.length >= 100) return;
   const row = document.createElement('fieldset');
@@ -1306,8 +1326,13 @@ function addBriefRoom() {
     '<button type="button">إزالة الفراغ</button>';
   const use = row.querySelector('select');
   for (const [value, option] of Object.entries(residentialSpaceRules)) use.add(new Option(option.label, value));
+  row.querySelector('[data-room="name"]').value = room.name ?? '';
+  use.value = room.roomUse ?? '';
+  row.querySelector('[data-room="width"]').value = room.w ?? '';
+  row.querySelector('[data-room="depth"]').value = room.h ?? '';
   row.querySelector('button').onclick = () => {
     row.remove();
+    manuallyEditedBriefRooms = true;
     $('briefAddRoom').disabled = false;
     clearBriefPlan();
   };
@@ -1324,15 +1349,19 @@ function briefCustomRooms() {
   });
 }
 
-$('briefAddRoom').onclick = addBriefRoom;
-$('briefLayoutMode').onchange = () => {
+$('briefAddRoom').onclick = () => { manuallyEditedBriefRooms = true; addBriefRoom(); };
+function updateBriefLayoutMode() {
   const custom = $('briefLayoutMode').value === 'custom';
   $('briefBedroomFields').hidden = $('briefBedroomFields').disabled = custom;
   $('briefCustomFields').hidden = $('briefCustomFields').disabled = !custom;
   if (custom && !$('briefRoomList').children.length) addBriefRoom();
   clearBriefPlan();
+}
+$('briefLayoutMode').onchange = updateBriefLayoutMode;
+$('briefLayoutForm').oninput = event => {
+  if (event.target.matches('[data-room]')) manuallyEditedBriefRooms = true;
+  clearBriefPlan();
 };
-$('briefLayoutForm').oninput = clearBriefPlan;
 $('briefLayoutForm').onsubmit = event => {
   event.preventDefault();
   clearBriefPlan();
@@ -1422,6 +1451,7 @@ function readProject(data) {
     project.brief = {
       description: typeof brief.description === 'string' ? brief.description.slice(0, 4000) : '',
       fields: cleanBrief(brief.fields),
+      rooms: cleanBriefRooms(brief.rooms),
     };
   }
   project.transmission = cleanTransmissionScenario(data.project?.transmission);
