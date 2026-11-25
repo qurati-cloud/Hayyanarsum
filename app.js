@@ -1,3 +1,4 @@
+import { briefFields, cleanBrief, extractBrief, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -449,7 +450,7 @@ $('editRoom').onclick = () => {
   $('mode').textContent = current.type === 'slab' ? 'حُدّثت البلاطة المحددة.' : 'حُدّثت المساحة المحددة.';
   render();
 };
-$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());clearCoordination();loadTransmissionForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());clearCoordination();loadTransmissionForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
+$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());clearCoordination();loadTransmissionForm();loadBriefForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());clearCoordination();loadTransmissionForm();loadBriefForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
 function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob ? t : new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 $('importDXF').onchange = async event => {
   const file = event.target.files[0];
@@ -1158,6 +1159,72 @@ for (const source of saudiSources) {
   $('sources').append(row);
 }
 const styles=['النجدية','النجدية الشمالية','ساحل تبوك','المدينة المنورة','ريف المدينة المنورة','الحجازية الساحلية','الطائف','جبال السروات','أصدار عسير','سفوح تهامة','ساحل تهامة','مرتفعات أبها','جزر فرسان','بيشة الصحراوية','نجران','واحات الأحساء','القطيف','الساحل الشرقي','النجدية الشرقية'];$('styles').innerHTML=styles.map(x=>'<span>عمارة '+x+'</span>').join('');const mods=[['الرسم ثنائي الأبعاد','نواة عملية'],['DXF / SVG / JSON','تصدير فعلي'],['الكميات والتكلفة','نواة عملية'],['التحقق السعودي','مقارنات استرشادية'],['IFC4','تصدير الجدران والفتحات'],['التحليل الإنشائي','غير منفذ'],['MEP والمحاكاة','غير منفذ'],['التعاون والحسابات','غير منفذ']];$('modules').innerHTML=mods.map(x=>`<div class="module"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');$('projectForm').onsubmit=e=>{e.preventDefault();S.project={...S.project,name:$('projectName').value,city:$('projectCity').value,revision:$('revision').value,description:$('description').value};localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('saved').textContent='تم الحفظ';loadSaudiFields()};
+const briefReview = $('briefReviewForm');
+const briefField = key => briefReview.elements.namedItem(key);
+let briefConflicts = [];
+const manuallyEditedBriefFields = new Set();
+function readBriefFields() {
+  return cleanBrief(Object.fromEntries(Object.keys(briefFields).map(key => {
+    const field = briefField(key);
+    return [key, field.type === 'number' ? field.valueAsNumber : field.value];
+  })));
+}
+function renderBriefQuestions() {
+  const data = readBriefFields();
+  $('briefQuestions').replaceChildren(...missingBriefFields(data).map(key => {
+    const item = document.createElement('li');
+    item.textContent = (briefConflicts.includes(key) ? 'ذُكرت قيم مختلفة. ' : '') + briefFields[key].question;
+    return item;
+  }));
+}
+function loadBriefForm() {
+  const saved = S.project.brief ?? {};
+  $('briefDescription').value = saved.description ?? '';
+  for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
+  briefConflicts = [];
+  manuallyEditedBriefFields.clear();
+  $('briefStatus').textContent = '';
+  renderBriefQuestions();
+}
+$('briefExtractForm').onsubmit = event => {
+  event.preventDefault();
+  const { data, conflicts } = extractBrief($('briefDescription').value);
+  briefConflicts = conflicts;
+  for (const key of Object.keys(briefFields)) {
+    if (!manuallyEditedBriefFields.has(key)) briefField(key).value = data[key] ?? '';
+  }
+  renderBriefQuestions();
+  const missing = missingBriefFields(readBriefFields()).length;
+  $('briefStatus').textContent = missing ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المسودة الأولية. راجعها قبل الحفظ.';
+};
+briefReview.oninput = event => {
+  const key = event.target.name;
+  if (!Object.hasOwn(briefFields, key)) return;
+  manuallyEditedBriefFields.add(key);
+  briefConflicts = briefConflicts.filter(item => item !== key);
+  $('briefStatus').textContent = '';
+  renderBriefQuestions();
+};
+briefReview.onsubmit = event => {
+  event.preventDefault();
+  const fields = readBriefFields();
+  for (const key of Object.keys(briefFields)) {
+    if (briefField(key).value && !Object.hasOwn(fields, key)) {
+      $('briefStatus').textContent = 'راجع القيمة في الحقل المحدد.';
+      briefField(key).focus();
+      return;
+    }
+  }
+  commit();
+  S.project.brief = { description: $('briefDescription').value.trim(), fields };
+  try {
+    localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
+    $('briefStatus').textContent = 'حُفظت المسودة في المشروع على هذا الجهاز.';
+  } catch {
+    $('briefStatus').textContent = 'تعذّر الحفظ المحلي. صدّر ملف JSON للاحتفاظ بالمسودة.';
+  }
+};
+
 function readProject(data) {
   if (data?.schema !== 2 || !Array.isArray(data.shapes) || data.shapes.length > 5000) throw new TypeError('Invalid project');
   const levels = validateLevels(data.levels);
@@ -1191,6 +1258,13 @@ function readProject(data) {
   const project = {};
   project.saudi = cleanSaudiInputs(data.project?.saudi);
   project.thermal = cleanThermalAssemblies(data.project?.thermal);
+  const brief = data.project?.brief;
+  if (brief && typeof brief === 'object') {
+    project.brief = {
+      description: typeof brief.description === 'string' ? brief.description.slice(0, 4000) : '',
+      fields: cleanBrief(brief.fields),
+    };
+  }
   project.transmission = cleanTransmissionScenario(data.project?.transmission);
   for (const key of ['name','city','revision','description']) {
     if (typeof data.project?.[key] === 'string') project[key] = data.project[key].slice(0, 4000);
@@ -1204,6 +1278,7 @@ function readProject(data) {
   return { schema: 2, project, shapes, measurements: cleanMeasurements(data.measurements, levels), prices, levels, activeLevel, selected: null, tool: 'select' };
 }
 function loadProjectFields() {
+  loadBriefForm();
   for (const [id, key] of [['projectName','name'], ['projectCity','city'], ['revision','revision'], ['description','description']]) {
     $(id).value = S.project[key] ?? $(id).defaultValue;
   }

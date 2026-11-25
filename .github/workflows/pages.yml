@@ -25,7 +25,7 @@ jobs:
       - name: Stage public files
         run: |
           mkdir -p dist
-          cp index.html styles.css app.js engine.js ifc.js wall-volume.js thermal.js coordination.js bcf.js zip.js dxf-import.js hayyanarsum-logo.png dist/
+          cp index.html styles.css app.js engine.js ifc.js wall-volume.js thermal.js coordination.js bcf.js zip.js dxf-import.js hayyanarsum-logo.png project-brief.js dist/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

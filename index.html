@@ -1,7 +1,7 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#073b2c"><title>هيا نرسم | Hayyanarsum</title><link rel="stylesheet" href="styles.css"></head><body>
 <header><a class="brand" href="#" aria-label="هيا نرسم | Hayyanarsum">
   <img src="hayyanarsum-logo.png" width="360" height="360" alt="هيا نرسم · هندسة تبدأ بفكرة">
-</a><nav><button data-view="workspace" class="active">مساحة العمل</button><button data-view="compliance">التحقق السعودي</button><button data-view="project">المشروع</button></nav><span class="badge">النسخة السعودية</span></header>
+</a><nav><button data-view="workspace" class="active">مساحة العمل</button><button data-view="compliance">التحقق السعودي</button><button data-view="project">المشروع</button><button data-view="brief">صمّم من وصفك</button></nav><span class="badge">النسخة السعودية</span></header>
 <main><section class="hero"><div><em>مساحة عمل هندسية موحّدة</em><h1>هندسة تبدأ بفكرة.</h1><p>ارسم بالأبعاد الحقيقية، احسب الكميات، وافحص القواعد الموثّقة دون ادعاء اعتماد غير متحقق.</p></div><div class="stats"><b id="count">0<small>عنصر</small></b><b id="area">0<small>م²</small></b><b id="checks">0<small>تحقق</small></b></div></section>
 <section id="workspace" class="view active">
 <div class="level-switch panel"><label>طابق الرسم<select id="activeLevel"></select></label><label>نقل العنصر المحدد<select id="moveLevel" disabled></select></label></div>
@@ -161,5 +161,29 @@
   <p class="muted">الحساب يخص الجزء المصمت. الجسور الحرارية والنوافذ وتسرب الهواء تحتاج نماذج منفصلة.</p>
 </details>
 <section class="panel"><div class="heading"><div><em>سجل المصادر</em><h2>الأكواد والأنظمة</h2></div></div><div id="sources"></div></section><section class="panel"><em>الهوية المكانية</em><h2>الطرز المعمارية السعودية التسعة عشر</h2><p>موجهات تصميمية مكانية؛ لا تُعامل تلقائيًا كقيم إنشائية أو كود بناء.</p><div id="styles" class="chips"></div></section></section>
-<section id="project" class="view"><div class="pagehead"><div><em>Project Control</em><h1>لوحة المشروع</h1></div></div><div class="projectgrid"><form class="panel" id="projectForm"><h2>بيانات المشروع</h2><label>الاسم<input id="projectName" value="مشروع جديد"></label><div class="two"><label>المدينة<input id="projectCity" value="الرياض"></label><label>الإصدار<input id="revision" value="P01"></label></div><label>الوصف<textarea id="description"></textarea></label><button class="primary">حفظ</button><p id="saved"></p></form><section class="panel"><h2>حالة الوحدات</h2><div id="modules"></div></section><section class="panel wide"><h2>حدود السلامة والاعتماد</h2><ul><li>لا تصدر المنصة شهادة امتثال أو اعتماد هندسي.</li><li>التحليل الإنشائي وMEP يحتاج محركًا متخصصًا ومراجعة مهندس مرخص.</li><li>لا تُفعّل قواعد المدن والمناطق التطويرية قبل توثيق نطاقها ونفاذها.</li><li>النتائج الأولية لا تُستخدم للتنفيذ دون مراجعة مهنية.</li></ul></section></div></section></main>
+<section id="project" class="view"><div class="pagehead"><div><em>Project Control</em><h1>لوحة المشروع</h1></div></div><div class="projectgrid"><form class="panel" id="projectForm"><h2>بيانات المشروع</h2><label>الاسم<input id="projectName" value="مشروع جديد"></label><div class="two"><label>المدينة<input id="projectCity" value="الرياض"></label><label>الإصدار<input id="revision" value="P01"></label></div><label>الوصف<textarea id="description"></textarea></label><button class="primary">حفظ</button><p id="saved"></p></form><section class="panel"><h2>حالة الوحدات</h2><div id="modules"></div></section><section class="panel wide"><h2>حدود السلامة والاعتماد</h2><ul><li>لا تصدر المنصة شهادة امتثال أو اعتماد هندسي.</li><li>التحليل الإنشائي وMEP يحتاج محركًا متخصصًا ومراجعة مهندس مرخص.</li><li>لا تُفعّل قواعد المدن والمناطق التطويرية قبل توثيق نطاقها ونفاذها.</li><li>النتائج الأولية لا تُستخدم للتنفيذ دون مراجعة مهنية.</li></ul></section></div></section><section id="brief" class="view" aria-labelledby="briefTitle">
+  <div class="pagehead"><div><h1 id="briefTitle">صمّم من وصف مشروعك</h1>
+    <p>ابدأ بوصف المبنى السكني بالعربية أو الإنجليزية أو الفرنسية. تملأ هذه الأداة الحقول التي تتعرّف عليها بقواعد محلية، ثم تسألك عن الناقص.</p>
+  </div></div>
+  <div class="projectgrid">
+    <form id="briefExtractForm" class="panel">
+      <h2>وصف المشروع</h2>
+      <label>ما الذي تريد بناءه؟<textarea id="briefDescription" maxlength="4000" rows="6" required placeholder="فيلا في الرياض من طابقين و٤ غرف نوم. عرض الأرض ٢٠ متر، وعمق الأرض ٣٠ متر."></textarea></label>
+      <button type="submit" class="primary">استخراج البيانات المذكورة</button>
+      <p class="muted">هذه الخطوة تجهّز بيانات المشروع للمراجعة. توليد المخطط بواسطة AI لم يُفعّل بعد.</p>
+    </form>
+    <form id="briefReviewForm" class="panel">
+      <h2>راجع بيانات المشروع</h2>
+      <label>نوع المبنى<select name="kind"><option value="">اختر النوع</option><option value="villa">فيلا</option><option value="house">منزل</option><option value="apartment">عمارة سكنية</option></select></label>
+      <label>المدينة<input name="city" maxlength="160" placeholder="اكتب اسم المدينة"></label>
+      <div class="two"><label>عرض الأرض على الشارع (م)<input name="frontage" type="number" min="0" max="1000000" step="any"></label>
+        <label>عمق الأرض (م)<input name="depth" type="number" min="0" max="1000000" step="any"></label></div>
+      <div class="two"><label>عدد الطوابق<input name="storeys" type="number" min="1" max="100" step="1"></label>
+        <label>عدد غرف النوم<input name="bedrooms" type="number" min="0" max="100" step="1"></label></div>
+      <ul id="briefQuestions" aria-label="البيانات المطلوبة"></ul>
+      <button type="submit" class="primary">حفظ مسودة الوصف محليًا</button>
+      <p id="briefStatus" role="status"></p>
+    </form>
+  </div>
+</section></main>
 <section id="printSheet"></section><footer><b>هيا نرسم · هندسة تبدأ بفكرة.</b><span>Hayyanarsum · Engineering begins with an idea.</span></footer><script type="module" src="app.js"></script></body></html>
