@@ -9,7 +9,7 @@
   <summary>إدارة الطوابق والمناسيب</summary>
   <div class="level-fields">
     <label>اسم الطابق<input id="levelName" maxlength="160"></label>
-    <label>المنسوب (م)<input id="levelElevation" type="number" step="any"></label>
+    <label>المنسوب (م)<input id="levelElevation" type="text" data-number inputmode="decimal" data-step="any"></label>
   </div>
   <button id="levelUpdate">تحديث الطابق النشط</button>
   <button id="levelAdd">إضافة طابق بهذه البيانات</button>
@@ -17,13 +17,13 @@
   <p id="levelStatus" role="status"></p>
 </details>
 <div class="work">
-<aside><h2>أدوات الرسم</h2><div class="tools"><button data-tool="select" class="active">⌖<small>تحديد</small></button><button data-tool="room">▭<small>مساحة</small></button><button data-tool="wall">╱<small>جدار</small></button><button data-tool="slab">▰<small>بلاطة</small></button><button data-tool="measure">↔<small>قياس</small></button></div><h3>خصائص العنصر</h3><label>الاسم<input id="shapeName" value="مساحة جديدة"></label><div class="two" id="shapeSize"><label>العرض (م)<input id="shapeW" type="number" min=".01" step="any" value="4"></label><label>الطول (م)<input id="shapeH" type="number" min=".01" step="any" value="5"></label></div><label id="roomHeightGroup">ارتفاع المساحة للعرض الثلاثي (م، اختياري)<input id="roomZ" type="number" min="0.01" max="1000" step="any" placeholder="أدخل الارتفاع"></label><fieldset id="roomReviewFields" class="review-fields"><legend>استخدام الفراغ للمراجعة السعودية</legend><label>الاستخدام السكني<select id="roomUse"><option value="">غير محدد</option></select></label><label class="clear-room"><input id="roomClear" type="checkbox">الأبعاد المدخلة صافية بعد التشطيب</label></fieldset><div id="slabFields" hidden><label>سماكة البلاطة (م)<input id="slabThickness" type="number" min="0.01" step="any"></label><div class="two"><label>بداية البلاطة X<input id="slabX" type="number" step="any" value="2"></label><label>بداية البلاطة Y<input id="slabY" type="number" step="any" value="2"></label></div><p class="notice">الوجه العلوي للبلاطة عند منسوب الطابق.</p></div><section id="slabCutPanel" hidden>
+<aside><h2>أدوات الرسم</h2><div class="tools"><button data-tool="select" class="active">⌖<small>تحديد</small></button><button data-tool="room">▭<small>مساحة</small></button><button data-tool="wall">╱<small>جدار</small></button><button data-tool="slab">▰<small>بلاطة</small></button><button data-tool="measure">↔<small>قياس</small></button></div><h3>خصائص العنصر</h3><label>الاسم<input id="shapeName" value="مساحة جديدة"></label><div class="two" id="shapeSize"><label>العرض (م)<input id="shapeW" type="text" data-number inputmode="decimal" data-min=".01" data-step="any" value="4"></label><label>الطول (م)<input id="shapeH" type="text" data-number inputmode="decimal" data-min=".01" data-step="any" value="5"></label></div><label id="roomHeightGroup">ارتفاع المساحة للعرض الثلاثي (م، اختياري)<input id="roomZ" type="text" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any" placeholder="أدخل الارتفاع"></label><fieldset id="roomReviewFields" class="review-fields"><legend>استخدام الفراغ للمراجعة السعودية</legend><label>الاستخدام السكني<select id="roomUse"><option value="">غير محدد</option></select></label><label class="clear-room"><input id="roomClear" type="checkbox">الأبعاد المدخلة صافية بعد التشطيب</label></fieldset><div id="slabFields" hidden><label>سماكة البلاطة (م)<input id="slabThickness" type="text" data-number inputmode="decimal" data-min="0.01" data-step="any"></label><div class="two"><label>بداية البلاطة X<input id="slabX" type="text" data-number inputmode="decimal" data-step="any" value="2"></label><label>بداية البلاطة Y<input id="slabY" type="text" data-number inputmode="decimal" data-step="any" value="2"></label></div><p class="notice">الوجه العلوي للبلاطة عند منسوب الطابق.</p></div><section id="slabCutPanel" hidden>
   <h3>فتحات البلاطة</h3>
   <label>الفتحة<select id="slabCutIndex"></select></label>
   <label>اسم الفتحة<input id="slabCutName" maxlength="120" placeholder="درج، مصعد، أو غيره"></label>
   <p>الإزاحة بالمتر من بداية البلاطة.</p>
-  <div class="two"><label>إزاحة X<input id="slabCutX" type="number" step="any"></label><label>إزاحة Y<input id="slabCutY" type="number" step="any"></label></div>
-  <div class="two"><label>العرض (م)<input id="slabCutWidth" type="number" step="any"></label><label>الطول (م)<input id="slabCutHeight" type="number" step="any"></label></div>
+  <div class="two"><label>إزاحة X<input id="slabCutX" type="text" data-number inputmode="decimal" data-step="any"></label><label>إزاحة Y<input id="slabCutY" type="text" data-number inputmode="decimal" data-step="any"></label></div>
+  <div class="two"><label>العرض (م)<input id="slabCutWidth" type="text" data-number inputmode="decimal" data-step="any"></label><label>الطول (م)<input id="slabCutHeight" type="text" data-number inputmode="decimal" data-step="any"></label></div>
   <button id="slabCutSave" class="primary">حفظ فتحة البلاطة</button>
   <button id="slabCutDelete" class="danger">حذف فتحة البلاطة المحددة</button>
   <p id="slabCutStatus" role="status"></p>
@@ -31,16 +31,16 @@
   <h3 id="linearTitle">الجدار المحدد</h3>
   <p id="cadSourceLayer" hidden></p>
   <p>الإحداثيات بالمتر. يبدأ قياس موضع الفتحة من النقطة الأولى.</p>
-  <div class="two"><label>بداية X<input id="wallX" type="number" step="any"></label><label>بداية Y<input id="wallY" type="number" step="any"></label></div>
-  <div class="two"><label>نهاية X<input id="wallX2" type="number" step="any"></label><label>نهاية Y<input id="wallY2" type="number" step="any"></label></div>
-  <div class="two" id="wallSize"><label>السماكة (م)<input id="wallT" type="number" step="any"></label><label>الارتفاع (م)<input id="wallZ" type="number" step="any"></label></div>
+  <div class="two"><label>بداية X<input id="wallX" type="text" data-number inputmode="decimal" data-step="any"></label><label>بداية Y<input id="wallY" type="text" data-number inputmode="decimal" data-step="any"></label></div>
+  <div class="two"><label>نهاية X<input id="wallX2" type="text" data-number inputmode="decimal" data-step="any"></label><label>نهاية Y<input id="wallY2" type="text" data-number inputmode="decimal" data-step="any"></label></div>
+  <div class="two" id="wallSize"><label>السماكة (م)<input id="wallT" type="text" data-number inputmode="decimal" data-step="any"></label><label>الارتفاع (م)<input id="wallZ" type="text" data-number inputmode="decimal" data-step="any"></label></div>
   <button id="wallApply" class="primary">تحديث الجدار</button>
   <details id="cadToWallPanel" class="review-fields" hidden>
     <summary>تحويل الخط إلى جدار</summary>
     <p>يحل الجدار محل الخط المرجعي على الطابق نفسه، ويصبح الخط محور الجدار.</p>
     <form id="cadToWallForm">
-      <label>سماكة الجدار (م)<input id="cadWallThickness" type="number" min="0.01" max="1000" step="any" required></label>
-      <label>ارتفاع الجدار (م)<input id="cadWallHeight" type="number" min="0.01" max="1000" step="any" required></label>
+      <label>سماكة الجدار (م)<input id="cadWallThickness" type="text" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any" required></label>
+      <label>ارتفاع الجدار (م)<input id="cadWallHeight" type="text" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any" required></label>
       <button type="submit">إنشاء الجدار على هذا المحور</button>
     </form>
   </details>
@@ -48,11 +48,11 @@
     <h3>الأبواب والنوافذ</h3>
     <label>الفتحة<select id="openingIndex"></select></label>
     <label>النوع<select id="openingKind"><option value="door">باب</option><option value="window">نافذة</option></select></label>
-    <div class="two"><label>البعد من البداية (م)<input id="openingOffset" type="number" step="any"></label><label>العرض (م)<input id="openingWidth" type="number" step="any"></label></div>
-    <div class="two"><label>منسوب أسفل الفتحة (م)<input id="openingSill" type="number" step="any"></label><label>ارتفاع الفتحة (م)<input id="openingHeight" type="number" step="any"></label></div>
+    <div class="two"><label>البعد من البداية (م)<input id="openingOffset" type="text" data-number inputmode="decimal" data-step="any"></label><label>العرض (م)<input id="openingWidth" type="text" data-number inputmode="decimal" data-step="any"></label></div>
+    <div class="two"><label>منسوب أسفل الفتحة (م)<input id="openingSill" type="text" data-number inputmode="decimal" data-step="any"></label><label>ارتفاع الفتحة (م)<input id="openingHeight" type="text" data-number inputmode="decimal" data-step="any"></label></div>
     <fieldset class="review-fields">
       <legend>الأداء الحراري للباب أو النافذة الخارجية</legend>
-      <label>معامل U للمنتج كاملًا (W/m²·K)<input id="openingThermalU" type="number" min="0" step="any"></label>
+      <label>معامل U للمنتج كاملًا (W/m²·K)<input id="openingThermalU" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label>
       <label>مرجع بيانات المنتج<input id="openingThermalRef" maxlength="180"></label>
     </fieldset>
     <button id="openingApply" class="primary">حفظ الفتحة</button>
@@ -73,8 +73,8 @@
   <h2 id="measurementTitle">القياسات الأفقية</h2>
   <p>اسحب بأداة «قياس» أو أدخل إحداثيات النقطتين بالمتر. تُحفظ القياسات ضمن ملف المشروع.</p>
   <form id="measurementForm">
-    <div class="two"><label>بداية X (م)<input type="number" id="measureX1" step="any" required></label><label>بداية Y (م)<input type="number" id="measureY1" step="any" required></label></div>
-    <div class="two"><label>نهاية X (م)<input type="number" id="measureX2" step="any" required></label><label>نهاية Y (م)<input type="number" id="measureY2" step="any" required></label></div>
+    <div class="two"><label>بداية X (م)<input type="text" data-number inputmode="decimal" id="measureX1" data-step="any" required></label><label>بداية Y (م)<input type="text" data-number inputmode="decimal" id="measureY1" data-step="any" required></label></div>
+    <div class="two"><label>نهاية X (م)<input type="text" data-number inputmode="decimal" id="measureX2" data-step="any" required></label><label>نهاية Y (م)<input type="text" data-number inputmode="decimal" id="measureY2" data-step="any" required></label></div>
     <button type="submit">إضافة قياس إلى الطابق النشط</button>
     <button type="button" id="exportMeasurements" disabled>تنزيل قياسات جميع الطوابق CSV</button>
   </form>
@@ -106,18 +106,18 @@
   <div class="two"><label>نوع المشروع<select id="buildingType"><option value="">اختر النوع</option><option value="apartment">عمارة سكنية</option><option value="mixed-apartment">عمارة سكنية تجارية</option><option value="villa">فيلا</option><option value="other">نوع آخر</option></select></label>
   <label>نوع العمل<select id="workType"><option value="">اختر العمل</option><option value="new">بناء جديد</option><option value="renovation">ترميم</option><option value="change-use">تغيير الاستخدام</option><option value="extension">توسعة</option><option value="alteration">تعديل</option></select></label></div>
   <details id="apartmentMeasurements" hidden><summary>قياسات العمائر السكنية للبناء الجديد</summary>
-    <div class="two"><label>مساحة الأرض (م²)<input id="landArea" type="number" min="0" step="any"></label><label>مساحة بناء الدور الأرضي (م²)<input id="groundArea" type="number" min="0" step="any"></label></div>
-    <label>مساحة بناء الدور الأول أو المتكرر المدخل (م²)<input id="upperArea" type="number" min="0" step="any"></label>
-    <div class="two"><label>مساحة الملحق العلوي (م²)<input id="roofArea" type="number" min="0" step="any"></label><label>مساحة الدور أسفل الملحق (م²)<input id="roofBaseArea" type="number" min="0" step="any"></label></div>
-    <div class="two"><label>عدد الشقق<input id="units" type="number" min="1" step="1"></label><label>المواقف المخصصة للشقق داخل الملكية<input id="parking" type="number" min="0" step="1"></label></div>
-    <div class="two"><label>عرض الشارع الأمامي (م)<input id="streetWidth" type="number" min="0" step="any"></label><label>الارتداد الأمامي المقاس (م)<input id="frontSetback" type="number" min="0" step="any"></label></div>
-    <label>عدد أدوار المبنى وفق المستند المعتمد<input id="floorCount" type="number" min="1" step="1"></label>
+    <div class="two"><label>مساحة الأرض (م²)<input id="landArea" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label><label>مساحة بناء الدور الأرضي (م²)<input id="groundArea" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label></div>
+    <label>مساحة بناء الدور الأول أو المتكرر المدخل (م²)<input id="upperArea" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label>
+    <div class="two"><label>مساحة الملحق العلوي (م²)<input id="roofArea" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label><label>مساحة الدور أسفل الملحق (م²)<input id="roofBaseArea" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label></div>
+    <div class="two"><label>عدد الشقق<input id="units" type="text" data-number inputmode="numeric" data-min="1" data-step="1"></label><label>المواقف المخصصة للشقق داخل الملكية<input id="parking" type="text" data-number inputmode="numeric" data-min="0" data-step="1"></label></div>
+    <div class="two"><label>عرض الشارع الأمامي (م)<input id="streetWidth" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label><label>الارتداد الأمامي المقاس (م)<input id="frontSetback" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label></div>
+    <label>عدد أدوار المبنى وفق المستند المعتمد<input id="floorCount" type="text" data-number inputmode="numeric" data-min="1" data-step="1"></label>
     <fieldset class="review-fields"><legend>الحدود الجانبية والخلفية</legend>
       <div id="siteEdges"></div><button id="addSiteEdge" type="button">إضافة حدّ للقطعة</button>
     </fieldset>
     <fieldset id="retailFields" class="review-fields" hidden><legend>مواقف المحلات التجارية</legend>
-      <div class="two"><label>عدد المحلات<input id="shopCount" type="number" min="1" step="1"></label><label>المساحة التجارية المعتمدة للحساب (م²)<input id="retailArea" type="number" min="0" step="any"></label></div>
-      <label>مواقف المحلات داخل الملكية<input id="retailParking" type="number" min="0" step="1"></label>
+      <div class="two"><label>عدد المحلات<input id="shopCount" type="text" data-number inputmode="numeric" data-min="1" data-step="1"></label><label>المساحة التجارية المعتمدة للحساب (م²)<input id="retailArea" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label></div>
+      <label>مواقف المحلات داخل الملكية<input id="retailParking" type="text" data-number inputmode="numeric" data-min="0" data-step="1"></label>
     </fieldset>
   </details>
   <button class="primary" type="submit">حفظ البيانات وحساب المقارنات</button>
@@ -130,11 +130,11 @@
   <form id="thermalForm">
     <label>التجميعات المحفوظة<select id="thermalSelect"></select></label>
     <div class="two"><label>اسم التجميعة<input id="thermalName" maxlength="180" required></label><label>العنصر<select id="thermalKind"><option value="wall">جدار خارجي</option><option value="roof">سقف خارجي</option></select></label></div>
-    <div class="two"><label>مقاومة السطح الداخلي (م²·K/W)<input id="thermalInside" type="number" min="0" step="any" required></label><label>مقاومة السطح الخارجي (م²·K/W)<input id="thermalOutside" type="number" min="0" step="any" required></label></div>
+    <div class="two"><label>مقاومة السطح الداخلي (م²·K/W)<input id="thermalInside" type="text" data-number inputmode="decimal" data-min="0" data-step="any" required></label><label>مقاومة السطح الخارجي (م²·K/W)<input id="thermalOutside" type="text" data-number inputmode="decimal" data-min="0" data-step="any" required></label></div>
     <div id="thermalLayers"></div>
     <button id="thermalLayerAdd" type="button">إضافة طبقة</button>
     <details class="review-fields"><summary>مقارنة بحد U موثّق للمشروع</summary>
-      <div class="two"><label>الحد الأعلى U (W/m²·K)<input id="thermalTarget" type="number" min="0" step="any"></label><label>مدينة المرجع<input id="thermalCity" maxlength="180"></label></div>
+      <div class="two"><label>الحد الأعلى U (W/m²·K)<input id="thermalTarget" type="text" data-number inputmode="decimal" data-min="0" data-step="any"></label><label>مدينة المرجع<input id="thermalCity" maxlength="180"></label></div>
       <label>مرجع الحد: الإصدار والمادة وتاريخ النفاذ<input id="thermalReference" maxlength="300"></label>
     </details>
     <button id="thermalSave" class="primary" type="submit">احسب واحفظ التجميعة</button>
@@ -146,8 +146,8 @@
     <form id="transmissionForm" class="review-fields">
       <h4>انتقال الحرارة عند درجات تصميم محددة</h4>
       <div class="two">
-        <label>درجة الحرارة الداخلية (°C)<input id="indoorC" type="number" min="-273.15" step="any" required></label>
-        <label>درجة الحرارة الخارجية (°C)<input id="outdoorC" type="number" min="-273.15" step="any" required></label>
+        <label>درجة الحرارة الداخلية (°C)<input id="indoorC" type="text" data-number inputmode="decimal" data-min="-273.15" data-step="any" required></label>
+        <label>درجة الحرارة الخارجية (°C)<input id="outdoorC" type="text" data-number inputmode="decimal" data-min="-273.15" data-step="any" required></label>
       </div>
       <label>مرجع درجات التصميم<input id="temperatureReference" maxlength="300" required></label>
       <button type="submit">حساب وحفظ درجات التصميم</button>
@@ -176,10 +176,10 @@
       <h2>راجع بيانات المشروع</h2>
       <label>نوع المبنى<select name="kind"><option value="">اختر النوع</option><option value="villa">فيلا</option><option value="house">منزل</option><option value="apartment">عمارة سكنية</option></select></label>
       <label>المدينة<input name="city" maxlength="160" placeholder="اكتب اسم المدينة"></label>
-      <div class="two"><label>عرض الأرض على الشارع (م)<input name="frontage" type="number" min="0" max="1000000" step="any"></label>
-        <label>عمق الأرض (م)<input name="depth" type="number" min="0" max="1000000" step="any"></label></div>
-      <div class="two"><label>عدد الطوابق<input name="storeys" type="number" min="1" max="100" step="1"></label>
-        <label>عدد غرف النوم<input name="bedrooms" type="number" min="0" max="100" step="1"></label></div>
+      <div class="two"><label>عرض الأرض على الشارع (م)<input name="frontage" type="text" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any"></label>
+        <label>عمق الأرض (م)<input name="depth" type="text" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any"></label></div>
+      <div class="two"><label>عدد الطوابق<input name="storeys" type="text" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1"></label>
+        <label>عدد غرف النوم<input name="bedrooms" type="text" data-number inputmode="numeric" data-min="0" data-max="100" data-step="1"></label></div>
       <ul id="briefQuestions" aria-label="البيانات المطلوبة"></ul>
       <button type="submit" class="primary">حفظ مسودة الوصف محليًا</button>
       <p id="briefStatus" role="status"></p>

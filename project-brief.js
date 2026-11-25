@@ -1,3 +1,5 @@
+import { normalizeNumericInput } from './engine.js';
+
 export const briefFields = {
   kind: { question: 'ما نوع المبنى السكني؟' },
   city: { question: 'في أي مدينة يقع المشروع؟' },
@@ -40,9 +42,7 @@ export function cleanBrief(input) {
 }
 
 export function extractBrief(description) {
-  const source = description.slice(0, 4000).normalize('NFKC').toLowerCase()
-    .replace(/[٠-٩۰-۹]/gu, digit => String(('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)) % 10))
-    .replaceAll('٫', '.').replace(/[\u064B-\u065F\u0670]/gu, '');
+  const source = normalizeNumericInput(description.slice(0, 4000).normalize('NFKC').toLowerCase()).replace(/[\u064B-\u065F\u0670]/gu, '');
   const candidates = Object.fromEntries(Object.keys(briefFields).map(key => [key, new Set()]));
   const add = (key, value) => {
     const clean = cleanBrief({ [key]: value });

@@ -97,3 +97,11 @@ test('metric DXF preserves decimals and flips display Y into CAD Y', () => {
   assert.equal((output.match(/\r\nLINE\r\n/g) || []).length, 4);
   assert.match(output, /21\r\n-8\.125/);
 });
+
+test('typed project numbers normalize Arabic and Persian digits and the decimal separator', async () => {
+  const { normalizeNumericInput } = await import('../engine.js');
+  assert.equal(normalizeNumericInput('  −١٢٫٥ '), '-12.5');
+  assert.equal(normalizeNumericInput('۱۲٫۵'), '12.5');
+  assert.equal(normalizeNumericInput('12.5'), '12.5');
+  assert.equal(normalizeNumericInput('١٢م'), '12م');
+});

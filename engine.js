@@ -1,3 +1,9 @@
+export function normalizeNumericInput(value) {
+  return value.trim()
+    .replace(/[٠-٩۰-۹]/gu, digit => String('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹'.indexOf(digit) % 10))
+    .replaceAll('٫', '.').replaceAll('−', '-');
+}
+
 export const snap = (value, step = 0.5) => Math.round(value / step) * step;
 export function nearestCadEndpoint(point, shapes, radius) {
   let nearest = null;

@@ -7,7 +7,7 @@ import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalK
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
-import{snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,planView,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{normalizeNumericInput,snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,planView,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 let fitDrawing = false;
 let snapCadEndpoints = false;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[];clearCoordination()};
@@ -16,10 +16,10 @@ function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(sh
 const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);
 const itemLabel = shape => S.levels.length === 1 ? shape.name : shape.name + ' · ' + elementLevel(shape, S.levels)?.name;
 const quantityFor = shape => isLinear(shape) ? length(shape) : shape.type === 'slab' ? slabNetArea(shape) : area(shape);
-function boq(){const items=S.shapes.filter(shape=>shape.type!=='cadLine');$('boq').innerHTML=items.map(s=>{const q=quantityFor(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(itemLabel(s))}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='wall'?'م ط':(s.type==='slab'?'م² · '+slabVolume(s).toFixed(3)+' م³':'م²')}</td><td><input class="rate" data-id="${s.id}" type="number" min="0" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=items.reduce((n,s)=>n+quantityFor(s)*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
+function boq(){const items=S.shapes.filter(shape=>shape.type!=='cadLine');$('boq').innerHTML=items.map(s=>{const q=quantityFor(s),r=Number(S.prices[s.id]||0);return`<tr><td>${esc(itemLabel(s))}</td><td>${s.layer}</td><td>${q.toFixed(2)}</td><td>${s.type==='wall'?'م ط':(s.type==='slab'?'م² · '+slabVolume(s).toFixed(3)+' م³':'م²')}</td><td><input class="rate" data-id="${s.id}" type="text" data-number inputmode="decimal" data-min="0" data-max="1000000000000" data-step="any" value="${r}"></td><td>${(q*r).toLocaleString('ar-SA')}</td></tr>`}).join('')||'<tr><td colspan="6">أضف عناصر ليظهر الحصر.</td></tr>';$('total').textContent=items.reduce((n,s)=>n+quantityFor(s)*Number(S.prices[s.id]||0),0).toLocaleString('ar-SA')+' ر.س'}
 function addRectangle(type, x, y, w = numberField('shapeW'), h = numberField('shapeH'), name = $('shapeName').value, manual = true) {
   const heightInput = $(type === 'slab' ? 'slabThickness' : 'roomZ').value;
-  const z = heightInput === '' ? null : Number(heightInput);
+  const z = heightInput === '' ? null : numberField(type === 'slab' ? 'slabThickness' : 'roomZ');
   const shape = { id: crypto.randomUUID(), type, name: name.trim().slice(0, 160) || (type === 'slab' ? 'بلاطة' : 'مساحة'),
     x, y, w, h, z, levelId: S.activeLevel, layer: type === 'slab' ? 'S-SLAB' : $('layer').value };
   if (type === 'room' && manual) Object.assign(shape, roomReviewFields());
@@ -261,7 +261,35 @@ $('moveLevel').onchange = event => {
 };
 const wallFields = { x: 'wallX', y: 'wallY', x2: 'wallX2', y2: 'wallY2', thickness: 'wallT', z: 'wallZ' };
 const openingFields = { offset: 'openingOffset', width: 'openingWidth', sill: 'openingSill', height: 'openingHeight' };
-const numberField = id => $(id).value === '' ? NaN : Number($(id).value);
+const numericValidator = document.createElement('input');
+numericValidator.type = 'number';
+function numericValue(field) {
+  for (const name of ['min', 'max', 'step', 'value']) {
+    const value = field.getAttribute(name === 'value' ? name : 'data-' + name);
+    if (value === null) numericValidator.removeAttribute(name);
+    else numericValidator.setAttribute(name, value);
+  }
+  numericValidator.value = normalizeNumericInput(field.value);
+  return numericValidator.validity.valid ? numericValidator.valueAsNumber : NaN;
+}
+const numberField = id => numericValue($(id));
+
+function validateNumericFields(form) {
+  for (const field of form.querySelectorAll('[data-number]')) {
+    if (field.matches(':disabled') || field.value === '' || Number.isFinite(numericValue(field))) continue;
+    field.setCustomValidity('أدخل رقمًا صالحًا ضمن الحدود المحددة للخانة.');
+    field.reportValidity();
+    field.setCustomValidity('');
+    return false;
+  }
+  return true;
+}
+document.addEventListener('submit', event => {
+  if (!validateNumericFields(event.target)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
 const selectedLinear = () => S.shapes.find(shape => shape.id === S.selected && isLinear(shape));
 const selectedWall = () => S.shapes.find(shape => shape.id === S.selected && shape.type === 'wall');
 const openingLabel = kind => kind === 'door' ? 'باب' : 'نافذة';
@@ -385,8 +413,8 @@ $('cadToWallForm').onsubmit = event => {
     x2: numberField('wallX2'), y2: numberField('wallY2'),
   }, {
     name: $('shapeName').value.trim().slice(0, 160) || 'جدار',
-    thickness: $('cadWallThickness').valueAsNumber,
-    z: $('cadWallHeight').valueAsNumber,
+    thickness: numberField('cadWallThickness'),
+    z: numberField('cadWallHeight'),
   });
   if (!wall) {
     $('wallStatus').textContent = 'تحقق من السماكة والارتفاع وإحداثيات طرفي المحور.';
@@ -408,7 +436,7 @@ $('openingApply').onclick = () => {
   const index = value === '' ? openings.length : Number(value);
   const values = Object.fromEntries(Object.entries(openingFields).map(([key, id]) => [key, numberField(id)]));
   const opening = { ...values, kind: $('openingKind').value };
-  const thermalU = $('openingThermalU').valueAsNumber;
+  const thermalU = numberField('openingThermalU');
   const thermalRef = $('openingThermalRef').value.trim().slice(0, 180);
   if ($('openingThermalU').value !== '' || thermalRef) {
     Object.assign(opening, { thermalU, thermalRef });
@@ -433,8 +461,8 @@ $('editRoom').onclick = () => {
   const current = S.shapes.find(shape => shape.id === S.selected && !isLinear(shape));
   if (!current) return;
   const updated = { ...current, name: $('shapeName').value.slice(0, 160) || 'مساحة',
-    w: Number($('shapeW').value), h: Number($('shapeH').value),
-    z: $('roomZ').value === '' ? null : Number($('roomZ').value), layer: $('layer').value };
+    w: numberField('shapeW'), h: numberField('shapeH'),
+    z: $('roomZ').value === '' ? null : numberField('roomZ'), layer: $('layer').value };
   if (current.type === 'slab') {
     Object.assign(updated, { x: numberField('slabX'), y: numberField('slabY'), z: numberField('slabThickness'),
       layer: 'S-SLAB', name: $('shapeName').value.trim().slice(0, 160) || 'بلاطة' });
@@ -451,7 +479,7 @@ $('editRoom').onclick = () => {
   render();
 };
 $('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());clearCoordination();loadTransmissionForm();loadBriefForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());clearCoordination();loadTransmissionForm();loadBriefForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
-function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob ? t : new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
+function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob ? t : new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=numericValue(e.target); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 $('importDXF').onchange = async event => {
   const file = event.target.files[0];
   const status = $('dxfImportStatus');
@@ -589,7 +617,7 @@ window.addEventListener('afterprint', () => $('printSheet').replaceChildren());
 $('measurementForm').onsubmit = event => {
   event.preventDefault();
   const ids = { x: 'measureX1', y: 'measureY1', x2: 'measureX2', y2: 'measureY2' };
-  const points = Object.fromEntries(Object.entries(ids).map(([key, id]) => [key, $(id).valueAsNumber]));
+  const points = Object.fromEntries(Object.entries(ids).map(([key, id]) => [key, numberField(id)]));
   if (addMeasurement(points)) event.target.reset();
 };
 $('exportMeasurements').onclick = () => {
@@ -736,8 +764,9 @@ function readReviewInputs() {
   const text = Object.fromEntries(saudiTextFields.map(id => [id, $(id).value]));
   const numbers = Object.fromEntries(saudiNumberFields.map(id => [id, numberField(id)]));
   const edges = [...$('siteEdges').querySelectorAll('fieldset')].map(row => {
-    const value = key => row.querySelector('[data-key="' + key + '"]').value;
-    const number = key => value(key) === '' ? null : Number(value(key));
+    const field = key => row.querySelector('[data-key="' + key + '"]');
+    const value = key => field(key).value;
+    const number = key => value(key) === '' ? null : numericValue(field(key));
     return { name: value('name'), kind: value('kind'), streetWidth: number('streetWidth'), setback: number('setback') };
   });
   return cleanSaudiInputs({ ...text, ...numbers, edges });
@@ -759,10 +788,11 @@ function addSiteEdge(edge = {}) {
     if (type === 'select') {
       for (const [kind, display] of Object.entries(saudiEdgeKinds)) input.add(new Option(display, kind));
     } else {
-      input.type = type;
       if (type === 'number') {
-        input.min = 0;
-        input.step = 'any';
+        input.dataset.number = '';
+        input.inputMode = 'decimal';
+        input.dataset.min = '0';
+        input.dataset.step = 'any';
       } else {
         input.maxLength = 100;
       }
@@ -892,7 +922,7 @@ function saveTransmission(design) {
 $('transmissionForm').onsubmit = event => {
   event.preventDefault();
   const design = cleanTransmissionScenario({
-    indoorC: $('indoorC').valueAsNumber, outdoorC: $('outdoorC').valueAsNumber,
+    indoorC: numberField('indoorC'), outdoorC: numberField('outdoorC'),
     reference: $('temperatureReference').value,
   });
   if (!design || !transmissionFor(envelopeResults(), design)) {
@@ -949,9 +979,10 @@ function addThermalLayer(layer = {}) {
     const field = document.createElement('input');
     field.dataset.key = key;
     if (key !== 'name') {
-      field.type = 'number';
-      field.step = 'any';
-      field.min = '0';
+      field.dataset.number = '';
+      field.inputMode = 'decimal';
+      field.dataset.step = 'any';
+      field.dataset.min = '0';
       field.required = true;
     }
     field.value = layer[key] ?? '';
@@ -979,7 +1010,7 @@ function readThermalForm() {
     input[key] = ['inside','outside','target'].includes(key) ? numberField(id) : $(id).value;
   }
   input.layers = [...$('thermalLayers').children].map(row => Object.fromEntries(
-    [...row.querySelectorAll('input')].map(field => [field.dataset.key, field.type === 'number' ? field.valueAsNumber : field.value])));
+    [...row.querySelectorAll('input')].map(field => [field.dataset.key, field.hasAttribute('data-number') ? numericValue(field) : field.value])));
   return cleanAssembly(input);
 }
 
@@ -1087,7 +1118,7 @@ $('checkForm').onsubmit = event => {
   }
 };
 $('exportSaudiReview').onclick = () => {
-  if (!$('checkForm').reportValidity()) return;
+  if (!$('checkForm').reportValidity() || !validateNumericFields($('checkForm'))) return;
   const city = $('siteCity').value.trim();
   const input = readReviewInputs();
   const rows = [
@@ -1166,7 +1197,7 @@ const manuallyEditedBriefFields = new Set();
 function readBriefFields() {
   return cleanBrief(Object.fromEntries(Object.keys(briefFields).map(key => {
     const field = briefField(key);
-    return [key, field.type === 'number' ? field.valueAsNumber : field.value];
+    return [key, field.hasAttribute('data-number') ? numericValue(field) : field.value];
   })));
 }
 function renderBriefQuestions() {
