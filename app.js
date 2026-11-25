@@ -1379,6 +1379,11 @@ function updateBriefSetbackFields() {
 }
 $('briefUseSetbacks').onchange = () => { updateBriefSetbackFields(); clearBriefPlan(); };
 $('briefLayoutMode').onchange = updateBriefLayoutMode;
+$('briefPlacement').onchange = () => {
+  const automatic = $('briefPlacement').value === 'automatic';
+  $('briefManualPlacement').hidden = $('briefManualPlacement').disabled = automatic;
+  clearBriefPlan();
+};
 $('briefLayoutForm').oninput = event => {
   if (event.target.matches('[data-room]')) manuallyEditedBriefRooms = true;
   clearBriefPlan();
@@ -1388,6 +1393,7 @@ $('briefLayoutForm').onsubmit = event => {
   clearBriefPlan();
   const brief = readBriefFields();
   const layout = {
+    automatic: $('briefPlacement').value === 'automatic',
     columns: numberField('briefLayoutColumns'), x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
     setbacks: readBriefSetbacks(),
   };
@@ -1402,7 +1408,8 @@ $('briefLayoutForm').onsubmit = event => {
     status.textContent = {
       brief: 'أكمل عرض الأرض وعمقها. في وضع غرف النوم المتماثلة، أدخل أيضًا عدد غرف النوم في المشروع.',
       'bedroom-count': 'أدخل إجمالي غرف النوم في بيانات المشروع بحيث يشمل غرف هذا الطابق.',
-      layout: 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
+      layout: layout.automatic ? 'تحقق من أسماء الفراغات وأبعادها.' : 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
+      'auto-fit': 'تعذر ترتيب الفراغات بهذه الأبعاد وبهذا الترتيب ضمن الحدود المتاحة. راجع الأبعاد أو ترتيب الفراغات.',
       setbacks: 'أدخل قيمة صالحة لكل جهة من جهات الارتداد الأربع.',
       'setback-size': 'الارتدادات المدخلة لا تترك مساحة للتوزيع. راجع أبعاد الأرض والقيم المدخلة.',
       'outside-setbacks': 'يتجاوز التوزيع الحدود المرجعية. عدّل أبعاد الفراغات أو عددها في الصف أو إزاحة أول فراغ.',
@@ -1416,6 +1423,7 @@ $('briefLayoutForm').onsubmit = event => {
   $('insertBriefPlan').disabled = !empty;
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
     thermalLabel(plan.rooms.length) + ' فراغات. ' +
+    (layout.automatic ? 'الحد الأقصى للفراغات في الصف المقترح ' + thermalLabel(plan.columns) + '. ' : '') +
     (plan.envelope ? 'المساحة داخل الحدود المرجعية ' +
       thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
     (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :

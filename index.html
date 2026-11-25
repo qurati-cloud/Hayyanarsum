@@ -188,7 +188,7 @@
   </div>
   <section class="panel" aria-labelledby="briefPlanTitle">
     <h2 id="briefPlanTitle">معاينة توزيع الفراغات</h2>
-    <p>أدخل أبعاد الفراغات وإزاحة أول فراغ من زاوية الأرض. تعرض المعاينة توزيعًا مستطيلاً في صفوف. يلزم تصميم الجدران والمداخل ومراجعة اشتراطات القطعة بصورة مستقلة.</p>
+    <p>أكمل أبعاد الفراغات ثم عاين توزيعها في صفوف. يلزم تصميم الجدران والمداخل ومراجعة اشتراطات القطعة بصورة مستقلة.</p>
     <form id="briefLayoutForm">
       <label>طريقة إدخال الفراغات<select id="briefLayoutMode"><option value="bedrooms">غرف نوم متماثلة</option><option value="custom">فراغات بأبعاد مختلفة</option></select></label>
       <fieldset id="briefBedroomFields" class="review-fields">
@@ -204,11 +204,18 @@
         <div id="briefRoomList"></div>
         <button id="briefAddRoom" type="button">إضافة فراغ</button>
       </fieldset>
-      <label>عدد الفراغات في الصف<input id="briefLayoutColumns" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1" required></label>
-      <div class="two">
-        <label>إزاحة أول فراغ من اليسار X (م)<input id="briefLayoutX" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
-        <label>إزاحة أول فراغ من جهة الشارع Y (م)<input id="briefLayoutY" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
-      </div>
+      <label>طريقة التوزيع<select id="briefPlacement">
+        <option value="automatic">ترتيب الصفوف تلقائيًا</option>
+        <option value="manual">تحديد الصفوف والإزاحة يدويًا</option>
+      </select></label>
+      <fieldset id="briefManualPlacement" class="review-fields" hidden disabled>
+        <legend>الصفوف والإزاحة</legend>
+        <label>عدد الفراغات في الصف<input id="briefLayoutColumns" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1" required></label>
+        <div class="two">
+          <label>إزاحة أول فراغ من اليسار X (م)<input id="briefLayoutX" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
+          <label>إزاحة أول فراغ من جهة الشارع Y (م)<input id="briefLayoutY" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
+        </div>
+      </fieldset>
       <label class="clear-room"><input id="briefUseSetbacks" type="checkbox"> حصر التوزيع ضمن ارتدادات أدخلها بنفسي</label>
       <fieldset id="briefSetbackFields" class="review-fields" hidden disabled>
         <legend>الارتدادات من حدود الأرض المستطيلة</legend>

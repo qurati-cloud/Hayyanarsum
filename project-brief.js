@@ -95,11 +95,33 @@ function rectangularReferences({ left, right, front, rear }, cadLayer, name) {
   });
 }
 
-function placeRoomBlocks(brief, { columns, x, y, setbacks }, blocks) {
+function layoutRows(blocks, columns, x, y, bounds, fits) {
+  const rooms = [];
+  let top = y;
+  for (let start = 0; start < blocks.length; start += columns) {
+    const row = blocks.slice(start, start + columns);
+    let left = x, rowHeight = 0;
+    for (const block of row) {
+      const { name, w, h, roomUse } = block;
+      if (!fits(left + w, bounds.right) || !fits(top + h, bounds.rear)) return null;
+      rooms.push({ type: 'room', layer: 'A-WALL', name: name.trim().slice(0, 160),
+        ...residentialRoomMetadata(roomUse, false), x: left, y: top, w, h, z: null });
+      left += w;
+      rowHeight = Math.max(rowHeight, h);
+    }
+    top += rowHeight;
+  }
+  return rooms;
+}
+
+function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic }, blocks) {
   const { frontage, depth } = cleanBrief(brief);
   if (!frontage || !depth) return { error: 'brief' };
-  if (!blocks.length || blocks.length > 100 || !Number.isInteger(columns) || columns < 1 || columns > blocks.length ||
-      ![x, y].every(value => Number.isFinite(value) && value >= 0)) return { error: 'layout' };
+  if (!blocks.length || blocks.length > 100 || blocks.some(({ name, w, h }) =>
+    typeof name !== 'string' || !name.trim() ||
+    ![w, h].every(value => Number.isFinite(value) && value > 0))) return { error: 'layout' };
+  if (!automatic && (!Number.isInteger(columns) || columns < 1 || columns > blocks.length ||
+      ![x, y].every(value => Number.isFinite(value) && value >= 0))) return { error: 'layout' };
   const fits = (used, available) => used <= available + Math.abs(available) * Number.EPSILON * 4;
   const lot = { left: 0, front: 0, right: frontage, rear: depth };
   let envelope = null;
@@ -111,27 +133,26 @@ function placeRoomBlocks(brief, { columns, x, y, setbacks }, blocks) {
   }
   const bounds = envelope ?? lot;
   const outside = envelope ? 'outside-setbacks' : 'outside';
-  if (!fits(bounds.left, x) || !fits(bounds.front, y)) return { error: outside };
-  const rooms = [];
-  let top = y;
-  for (let start = 0; start < blocks.length; start += columns) {
-    const row = blocks.slice(start, start + columns);
-    let left = x, rowHeight = 0;
-    for (const block of row) {
-      const { name, w, h, roomUse } = block;
-      if (typeof name !== 'string' || !name.trim() ||
-          ![w, h].every(value => Number.isFinite(value) && value > 0)) return { error: 'layout' };
-      if (!fits(left + w, bounds.right) || !fits(top + h, bounds.rear)) return { error: outside };
-      rooms.push({ type: 'room', layer: 'A-WALL', name: name.trim().slice(0, 160),
-        ...residentialRoomMetadata(roomUse, false), x: left, y: top, w, h, z: null });
-      left += w;
-      rowHeight = Math.max(rowHeight, h);
-    }
-    top += rowHeight;
+  if (automatic) {
+    x = bounds.left;
+    y = bounds.front;
+  } else if (!fits(bounds.left, x) || !fits(bounds.front, y)) {
+    return { error: outside };
   }
+
+  // Keep the supplied room order and try wider rows first.
+  let rooms = null;
+  for (let candidate = automatic ? blocks.length : columns; candidate >= 1; candidate--) {
+    rooms = layoutRows(blocks, candidate, x, y, bounds, fits);
+    if (rooms || !automatic) {
+      columns = candidate;
+      break;
+    }
+  }
+  if (!rooms) return { error: automatic ? 'auto-fit' : outside };
   const references = rectangularReferences(lot, 'SITE-LOT', 'حد الأرض');
   if (envelope) references.push(...rectangularReferences(envelope, 'SITE-LIMIT', 'حد مرجعي للتوزيع'));
-  return { frontage, depth, envelope, references, rooms };
+  return { frontage, depth, envelope, references, rooms, columns };
 }
 
 export function bedroomBlockPlan(brief, layout) {

@@ -101,3 +101,30 @@ test('setbacks require all four distances and accept explicit zero', async () =>
   assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: { ...zeros, left: 5, right: 5 } }).error, 'setback-size');
   assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: { ...zeros, rear: 20 } }).error, 'setback-size');
 });
+
+test('automatic placement finds a narrower row configuration inside the supplied setbacks', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const brief = { frontage: 13, depth: 13 };
+  const layout = { automatic: true, setbacks: { left: 2, right: 3, front: 3, rear: 2 } };
+  const rooms = [
+    { name: 'مجلس', w: 5, h: 5 },
+    { name: 'مطبخ', w: 3, h: 3 },
+    { name: 'مدخل', w: 4, h: 3 },
+  ];
+  const plan = customRoomBlockPlan(brief, layout, rooms);
+  assert.equal(plan.columns, 2);
+  assert.deepEqual(plan.rooms.map(({ name, x, y, w, h }) => [name, x, y, w, h]),
+    [['مجلس', 2, 3, 5, 5], ['مطبخ', 7, 3, 3, 3], ['مدخل', 2, 8, 4, 3]]);
+  assert.equal(customRoomBlockPlan({ ...brief, depth: 12.99 }, layout, rooms).error, 'auto-fit');
+  assert.equal(customRoomBlockPlan(brief, layout, [{ ...rooms[0], h: null }]).error, 'layout');
+  assert.equal(customRoomBlockPlan(brief, { ...layout, automatic: false }, rooms).error, 'layout');
+});
+
+test('automatic placement with explicit dimensions starts at the lot origin when setbacks are disabled', async () => {
+  const { bedroomBlockPlan } = await import('../project-brief.js');
+  const plan = bedroomBlockPlan({ frontage: 8, depth: 8, bedrooms: 2 },
+    { automatic: true, count: 2, width: 4, roomDepth: 3 });
+  assert.equal(plan.columns, 2);
+  assert.deepEqual(plan.rooms.map(({ x, y }) => [x, y]), [[0, 0], [4, 0]]);
+  assert.equal(plan.references.length, 4);
+});
