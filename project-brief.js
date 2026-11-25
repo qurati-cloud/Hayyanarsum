@@ -77,3 +77,29 @@ export function extractBrief(description) {
 export function missingBriefFields(data) {
   return Object.keys(briefFields).filter(key => !Object.hasOwn(data, key));
 }
+
+export function bedroomBlockPlan(brief, layout) {
+  const { frontage, depth, bedrooms } = cleanBrief(brief);
+  if (!frontage || !depth || bedrooms === undefined) return { error: 'brief' };
+  const { count, columns, width, roomDepth, x, y } = layout;
+  if (!Number.isInteger(count) || count < 1 || count > bedrooms ||
+      !Number.isInteger(columns) || columns < 1 || columns > count ||
+      ![width, roomDepth].every(value => Number.isFinite(value) && value > 0) ||
+      ![x, y].every(value => Number.isFinite(value) && value >= 0)) return { error: 'layout' };
+
+  const fits = (used, available) => used <= available + Math.abs(available) * Number.EPSILON * 4;
+  if (!fits(x + columns * width, frontage) || !fits(y + Math.ceil(count / columns) * roomDepth, depth)) {
+    return { error: 'outside' };
+  }
+  const corners = [[0, 0], [frontage, 0], [frontage, depth], [0, depth]];
+  const references = corners.map(([x1, y1], index) => {
+    const [x2, y2] = corners[(index + 1) % 4];
+    return { type: 'cadLine', layer: 'CAD-REF', cadLayer: 'SITE-LOT', name: 'حد الأرض ' + (index + 1), x: x1, y: y1, x2, y2 };
+  });
+  const rooms = Array.from({ length: count }, (_, index) => ({
+    type: 'room', layer: 'A-WALL', roomUse: 'bedroom', clearRoom: false,
+    name: 'غرفة نوم ' + (index + 1), x: x + index % columns * width,
+    y: y + Math.floor(index / columns) * roomDepth, w: width, h: roomDepth, z: null,
+  }));
+  return { frontage, depth, references, rooms };
+}

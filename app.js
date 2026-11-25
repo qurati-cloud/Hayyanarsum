@@ -1,4 +1,4 @@
-import { briefFields, cleanBrief, extractBrief, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, briefFields, cleanBrief, extractBrief, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1215,12 +1215,14 @@ function loadBriefForm() {
   briefConflicts = [];
   manuallyEditedBriefFields.clear();
   $('briefStatus').textContent = '';
+  clearBriefPlan();
   renderBriefQuestions();
 }
 $('briefExtractForm').onsubmit = event => {
   event.preventDefault();
   const { data, conflicts } = extractBrief($('briefDescription').value);
   briefConflicts = conflicts;
+  clearBriefPlan();
   for (const key of Object.keys(briefFields)) {
     if (!manuallyEditedBriefFields.has(key)) briefField(key).value = data[key] ?? '';
   }
@@ -1234,6 +1236,7 @@ briefReview.oninput = event => {
   manuallyEditedBriefFields.add(key);
   briefConflicts = briefConflicts.filter(item => item !== key);
   $('briefStatus').textContent = '';
+  clearBriefPlan();
   renderBriefQuestions();
 };
 briefReview.onsubmit = event => {
@@ -1254,6 +1257,87 @@ briefReview.onsubmit = event => {
   } catch {
     $('briefStatus').textContent = 'تعذّر الحفظ المحلي. صدّر ملف JSON للاحتفاظ بالمسودة.';
   }
+};
+
+let briefPlan;
+function clearBriefPlan() {
+  briefPlan = undefined;
+  $('insertBriefPlan').disabled = true;
+  $('briefPlanPreview').hidden = true;
+  $('briefPlanPreview').replaceChildren();
+  $('briefPlanStatus').textContent = '';
+}
+
+function drawBriefPreview(plan) {
+  const canvas = $('briefPlanPreview');
+  canvas.replaceChildren();
+  const scale = Math.min(640 / plan.frontage, 340 / plan.depth);
+  const x = (720 - scale * plan.frontage) / 2;
+  const y = (420 - scale * plan.depth) / 2;
+  canvas.append(el('rect', { x, y, width: plan.frontage * scale, height: plan.depth * scale,
+    fill: '#f8f6ef', stroke: '#47677b', 'stroke-width': 2 }));
+  for (const [index, room] of plan.rooms.entries()) {
+    const left = x + room.x * scale, top = y + room.y * scale;
+    const w = room.w * scale, h = room.h * scale;
+    const rectangle = el('rect', { x: left, y: top, width: w, height: h, fill: '#dceee4', stroke: '#0e5a40' });
+    const title = el('title');
+    title.textContent = room.name + ' · ' + thermalLabel(room.w) + ' × ' + thermalLabel(room.h) + ' م';
+    rectangle.append(title);
+    canvas.append(rectangle);
+    if (Math.min(w, h) < 22) continue;
+    const label = el('text', { x: left + w / 2, y: top + h / 2, 'text-anchor': 'middle',
+      'dominant-baseline': 'middle', fill: '#073b2c', 'font-size': 13 });
+    label.textContent = thermalLabel(index + 1);
+    canvas.append(label);
+  }
+  canvas.hidden = false;
+}
+
+const briefTargetIsEmpty = () => levelShapes().length === 0 && levelMeasurements().length === 0;
+$('briefLayoutForm').oninput = clearBriefPlan;
+$('briefLayoutForm').onsubmit = event => {
+  event.preventDefault();
+  clearBriefPlan();
+  const plan = bedroomBlockPlan(readBriefFields(), {
+    count: numberField('briefLayoutCount'), columns: numberField('briefLayoutColumns'),
+    width: numberField('briefLayoutWidth'), roomDepth: numberField('briefLayoutDepth'),
+    x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
+  });
+  const status = $('briefPlanStatus');
+  if (plan.error) {
+    status.textContent = {
+      brief: 'أكمل عرض الأرض وعمقها وعدد غرف النوم في بيانات المشروع.',
+      layout: 'تحقق من الأبعاد والإزاحة، وعدد غرف الطابق، وعدد الغرف في كل صف.',
+      outside: 'تتجاوز الغرف حدود الأرض. عدّل الأبعاد أو عدد الغرف في الصف أو الإزاحة.',
+    }[plan.error];
+    return;
+  }
+  briefPlan = { ...plan, levelId: S.activeLevel };
+  drawBriefPreview(plan);
+  const empty = briefTargetIsEmpty();
+  $('insertBriefPlan').disabled = !empty;
+  status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
+    thermalLabel(plan.rooms.length) + ' غرف. ' + (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
+      'اختر طابق رسم فارغًا ثم أعد المعاينة للإضافة.');
+};
+$('insertBriefPlan').onclick = () => {
+  if (!briefPlan || briefPlan.levelId !== S.activeLevel || !briefTargetIsEmpty()) {
+    clearBriefPlan();
+    $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة.';
+    return;
+  }
+  const shapes = [...briefPlan.references, ...briefPlan.rooms];
+  if (S.shapes.length + shapes.length > 5000 || !shapes.every(valid)) {
+    $('briefPlanStatus').textContent = 'تعذّر إدراج التوزيع. تحقق من الأبعاد وحدّ عناصر المشروع.';
+    return;
+  }
+  commit();
+  S.shapes.push(...shapes.map(shape => ({ ...shape, id: crypto.randomUUID(), levelId: S.activeLevel })));
+  clearBriefPlan();
+  fitDrawing = true;
+  selectShape(null);
+  document.querySelector('[data-view="workspace"]').click();
+  $('mode').textContent = 'أُضيفت حدود الأرض والغرف القابلة للتعديل.';
 };
 
 function readProject(data) {

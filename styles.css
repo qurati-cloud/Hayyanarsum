@@ -60,3 +60,6 @@ button:disabled{opacity:.55;cursor:default}
   #printSheet p{font-size:9pt;margin:0 0 4mm}
   #printSheet svg{display:block;width:100%;height:auto;max-height:154mm}
 }
+
+#briefLayoutForm{max-width:44rem}
+#briefPlanPreview:not([hidden]){display:block;width:100%;max-width:48rem;height:auto;margin-block-start:1rem}

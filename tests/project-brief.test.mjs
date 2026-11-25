@@ -23,3 +23,17 @@ test('contradictory sizes remain blank and unlabeled or unsupported units are ig
   assert.deepEqual(result.data, { kind: 'villa' });
   assert.deepEqual(cleanBrief({ kind: '__proto__', city: '', depth: -1, bedrooms: 0, storeys: 1.5 }), { bedrooms: 0 });
 });
+
+test('bedroom preview packs supplied dimensions without exceeding the site', async () => {
+  const { bedroomBlockPlan } = await import('../project-brief.js');
+  const brief = { frontage: 20, depth: 30, bedrooms: 4 };
+  const layout = { count: 3, columns: 2, width: 4, roomDepth: 5, x: 2, y: 3 };
+  const plan = bedroomBlockPlan(brief, layout);
+  assert.equal(plan.references.length, 4);
+  assert.deepEqual(plan.rooms.map(({ x, y, w, h }) => [x, y, w, h]), [[2, 3, 4, 5], [6, 3, 4, 5], [2, 8, 4, 5]]);
+  assert.ok(plan.rooms.every(room => room.roomUse === 'bedroom' && !room.clearRoom));
+  assert.equal(bedroomBlockPlan(brief, { ...layout, x: 13 }).error, 'outside');
+  assert.equal(bedroomBlockPlan(brief, { ...layout, y: 21 }).error, 'outside');
+  assert.equal(bedroomBlockPlan(brief, { ...layout, count: 5 }).error, 'layout');
+  assert.equal(bedroomBlockPlan({ ...brief, depth: null }, layout).error, 'brief');
+});
