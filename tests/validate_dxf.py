@@ -1,4 +1,4 @@
-"""Verify DXF import and re-export with a drawing produced by ezdxf."""
+"""Verify the DXF round-trip and draft export with the independent ezdxf reader."""
 from io import StringIO
 from pathlib import Path
 from subprocess import run
@@ -37,5 +37,34 @@ def validate():
     print("Verified ezdxf input in millimetres and metric LINE round-trip.")
 
 
+def validate_brief_preview():
+    code = """
+        import { briefPreviewDxf, customRoomBlockPlan } from './project-brief.js';
+        const plan = customRoomBlockPlan({ frontage: 12, depth: 15 }, {
+          automatic: true, setbacks: { left: 1.5, right: 1, front: 2.25, rear: 3 },
+        }, [{ name: 'مجلس', w: 3.5, h: 4.25 }]);
+        if (plan.error) throw Error(plan.error);
+        process.stdout.write(briefPreviewDxf(plan));
+    """
+    result = run(["node", "--input-type=module", "-e", code], cwd=Path(__file__).resolve().parents[1],
+                 capture_output=True, check=True, text=True)
+    exported = ezdxf.read(StringIO(result.stdout))
+    assert exported.units == ezdxf.units.M
+    assert not exported.audit().errors
+    lines = exported.modelspace().query("LINE")
+    assert len(lines) == 12
+    for layer, start, end in [
+        ("SITE-LOT", (0, 0, 0), (12, 0, 0)),
+        ("SITE-LIMIT", (1.5, -2.25, 0), (11, -2.25, 0)),
+        ("A-ROOM", (1.5, -2.25, 0), (5, -2.25, 0)),
+    ]:
+        edges = [line for line in lines if line.dxf.layer == layer]
+        assert len(edges) == 4
+        assert tuple(edges[0].dxf.start) == start
+        assert tuple(edges[0].dxf.end) == end
+    print("Verified metric brief preview with separate lot, setback, and room layers.")
+
+
 if __name__ == "__main__":
     validate()
+    validate_brief_preview()

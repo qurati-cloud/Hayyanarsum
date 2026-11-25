@@ -1,4 +1,4 @@
-import { normalizeNumericInput, residentialRoomMetadata } from './engine.js';
+import { dxf, normalizeNumericInput, residentialRoomMetadata } from './engine.js';
 
 export const briefFields = {
   kind: { question: 'ما نوع المبنى السكني؟' },
@@ -228,6 +228,11 @@ export function customRoomBlockPlan(brief, layout, rooms) {
   if (count && bedrooms === undefined) return { error: 'bedroom-count' };
   if (bedrooms !== undefined && count > bedrooms) return { error: 'bedroom-count' };
   return placeRoomBlocks(brief, layout, rooms);
+}
+
+export function briefPreviewDxf(plan) {
+  const outlines = plan.rooms.map(room => ({ ...room, layer: 'A-ROOM' }));
+  return dxf([...plan.references, ...outlines]);
 }
 
 const roomLabels = {

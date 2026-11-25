@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1379,6 +1379,7 @@ let briefPlan;
 function clearBriefPlan() {
   briefPlan = undefined;
   $('insertBriefPlan').disabled = true;
+  $('exportBriefDxf').disabled = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
   $('briefPlanRooms').hidden = true;
@@ -1564,6 +1565,7 @@ $('briefLayoutForm').onsubmit = event => {
   drawBriefPreview(plan);
   const empty = briefTargetIsEmpty();
   $('insertBriefPlan').disabled = !empty;
+  $('exportBriefDxf').disabled = false;
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
     thermalLabel(plan.rooms.length) + ' فراغات. ' +
     (layout.automatic ? 'الحد الأقصى للفراغات في الصف المقترح ' + thermalLabel(plan.columns) + '. ' : '') +
@@ -1571,6 +1573,14 @@ $('briefLayoutForm').onsubmit = event => {
       thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
     (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
       'اختر طابق رسم فارغًا ثم أعد المعاينة للإضافة.');
+};
+$('exportBriefDxf').onclick = () => {
+  if (!briefPlan) return;
+  try {
+    dl('hayyanarsum-layout-preview.dxf', briefPreviewDxf(briefPlan), 'application/dxf');
+  } catch {
+    $('briefPlanStatus').textContent = 'تعذّر تصدير المعاينة. راجع الأبعاد وأعد المعاينة.';
+  }
 };
 $('insertBriefPlan').onclick = () => {
   if (!briefPlan || briefPlan.levelId !== S.activeLevel || !briefTargetIsEmpty()) {

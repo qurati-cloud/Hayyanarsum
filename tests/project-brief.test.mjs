@@ -214,3 +214,21 @@ test('a named room is kept for review when its dimensions are missing, inconsist
   ]);
   assert.equal(customRoomBlockPlan({ frontage: 10, depth: 12, bedrooms: 1 }, { automatic: true }, rooms).error, 'layout');
 });
+
+test('the preview exports metric room and lot outlines without mutating the plan', async () => {
+  const { briefPreviewDxf, customRoomBlockPlan } = await import('../project-brief.js');
+  const { readDxf } = await import('../dxf-import.js');
+  const plan = customRoomBlockPlan({ frontage: 10, depth: 12 },
+    { columns: 1, x: 1.25, y: 2.5 }, [{ name: 'مطبخ', roomUse: 'kitchen', w: 3.5, h: 2.25 }]);
+  const result = readDxf(briefPreviewDxf(plan));
+  assert.equal(result.lines.length, 8);
+  assert.equal(result.skipped, 0);
+  assert.deepEqual(result.lines.map(line => line.cadLayer), [
+    'SITE-LOT', 'SITE-LOT', 'SITE-LOT', 'SITE-LOT', 'A-ROOM', 'A-ROOM', 'A-ROOM', 'A-ROOM',
+  ]);
+  assert.deepEqual(result.lines.filter(line => line.cadLayer === 'A-ROOM')
+    .map(({ x, y, x2, y2 }) => [x, y, x2, y2]),
+    [[1.25, 2.5, 4.75, 2.5], [4.75, 2.5, 4.75, 4.75],
+     [4.75, 4.75, 1.25, 4.75], [1.25, 4.75, 1.25, 2.5]]);
+  assert.equal(plan.rooms[0].layer, 'A-WALL');
+});
