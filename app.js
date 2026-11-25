@@ -6,7 +6,7 @@ import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalK
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
-import{snap,area,isLinear,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{snap,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 let fitDrawing = false;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[];clearCoordination()};
 function dimension(s){const g=$('dims'),t=el('text',{x:(!isLinear(s)?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(!isLinear(s)?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(!isLinear(s)?s.w:length(s)).toFixed(2)+' m';g.append(t)}
@@ -60,6 +60,10 @@ $('fitDrawing').onclick = () => { fitDrawing = !fitDrawing; updateDrawingExtent(
 $('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else{if(S.tool==='room')$('roomClear').checked=false;start=pt(e)}};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(['room','slab'].includes(S.tool)?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(['room','slab'].includes(S.tool)&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
 document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));syncRectangleEditor();$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view));if(v.dataset.view==='compliance')runChecks()}};
 function selectShape(id) {
+  if (S.selected !== id) {
+    $('cadToWallPanel').open = false;
+    $('cadToWallForm').reset();
+  }
   S.selected = id;
   const shape = S.shapes.find(item => item.id === id);
   if (shape) {
@@ -291,6 +295,7 @@ function renderWallEditor() {
     const reference = wall.type === 'cadLine';
     $('linearTitle').textContent = reference ? 'خط DXF المحدد' : 'الجدار المحدد';
     $('wallSize').hidden = reference;
+    $('cadToWallPanel').hidden = !reference;
     $('wallApply').textContent = reference ? 'تحديث الخط' : 'تحديث الجدار';
     $('cadSourceLayer').hidden = !reference;
     $('cadSourceLayer').textContent = reference ? 'طبقة المصدر ' + wall.cadLayer : '';
@@ -360,6 +365,28 @@ $('wallApply').onclick = () => {
   }
   saveWall({ ...wall, ...values, name: name || 'جدار',
     layer: $('layer').value, openings: wall.openings ?? [] }, 'حُدّث الجدار.');
+};
+$('cadToWallForm').onsubmit = event => {
+  event.preventDefault();
+  const line = selectedLinear();
+  if (line?.type !== 'cadLine') return;
+  const wall = wallFromCadLine({
+    ...line, x: numberField('wallX'), y: numberField('wallY'),
+    x2: numberField('wallX2'), y2: numberField('wallY2'),
+  }, {
+    name: $('shapeName').value.trim().slice(0, 160) || 'جدار',
+    thickness: $('cadWallThickness').valueAsNumber,
+    z: $('cadWallHeight').valueAsNumber,
+  });
+  if (!wall) {
+    $('wallStatus').textContent = 'تحقق من السماكة والارتفاع وإحداثيات طرفي المحور.';
+    return;
+  }
+  if (saveWall(wall, 'تحوّل الخط إلى جدار على الطابق نفسه.')) {
+    $('layer').value = wall.layer;
+    $('cadToWallPanel').open = false;
+    event.target.reset();
+  }
 };
 $('openingIndex').onchange = loadOpeningFields;
 $('openingKind').onchange = configureOpeningSill;

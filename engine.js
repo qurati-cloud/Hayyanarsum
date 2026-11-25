@@ -196,6 +196,12 @@ export function valid(shape) {
         : shape.z == null || validHeight(shape.z)));
 }
 
+export function wallFromCadLine(line, { name, thickness, z }) {
+  if (line?.type !== 'cadLine' || !valid(line) || !validHeight(thickness) || !validHeight(z)) return null;
+  const { id, levelId, x, y, x2, y2 } = line;
+  return { id, levelId, x, y, x2, y2, type: 'wall', layer: 'A-WALL', name, thickness, z, openings: [] };
+}
+
 export const residentialReference = Object.freeze({
   authority: 'وزارة البلديات والإسكان',
   title: 'اشتراطات إنشاء المباني السكنية',

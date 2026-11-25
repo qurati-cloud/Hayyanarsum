@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readDxf } from '../dxf-import.js';
-import { dxf, length } from '../engine.js';
+import { dxf, length, wallFromCadLine, wallQuantities } from '../engine.js';
 
 const drawing = (entities, unit = '6') => [
   '0', 'SECTION', '2', 'HEADER', ...(unit === '' ? [] : ['9', '$INSUNITS', '70', unit]),
@@ -42,4 +42,18 @@ test('reject binary, partial files and an over-limit import', () => {
   assert.throws(() => readDxf('AutoCAD Binary DXF\r\n\x1a\0'), /format/);
   assert.throws(() => readDxf(drawing(line).replace('EOF', '')), /format/);
   assert.throws(() => readDxf(drawing([...line, ...line]), null, 1), /limit/);
+});
+
+test('an imported CAD segment becomes a wall at its metric coordinates only after valid dimensions', () => {
+  const [imported] = readDxf(drawing(line, '4')).lines;
+  const reference = { ...imported, id: 'cad1', levelId: 'upper' };
+  assert.equal(wallFromCadLine(reference, { thickness: .2 }), null);
+  assert.equal(wallFromCadLine(reference, { thickness: -.2, z: 3 }), null);
+  const wall = wallFromCadLine(reference, { name: 'جدار', thickness: .2, z: 3 });
+  assert.deepEqual(wall, {
+    id: 'cad1', levelId: 'upper', x: 1, y: -2, x2: 2.5, y2: -4,
+    type: 'wall', layer: 'A-WALL', name: 'جدار', thickness: .2, z: 3, openings: [],
+  });
+  assert.ok(Math.abs(wallQuantities(wall).netVolume - 1.5) < 1e-10);
+  assert.equal(reference.type, 'cadLine');
 });

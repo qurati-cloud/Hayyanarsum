@@ -33,6 +33,15 @@
   <div class="two"><label>نهاية X<input id="wallX2" type="number" step="any"></label><label>نهاية Y<input id="wallY2" type="number" step="any"></label></div>
   <div class="two" id="wallSize"><label>السماكة (م)<input id="wallT" type="number" step="any"></label><label>الارتفاع (م)<input id="wallZ" type="number" step="any"></label></div>
   <button id="wallApply" class="primary">تحديث الجدار</button>
+  <details id="cadToWallPanel" class="review-fields" hidden>
+    <summary>تحويل الخط إلى جدار</summary>
+    <p>يحل الجدار محل الخط المرجعي على الطابق نفسه، ويصبح الخط محور الجدار.</p>
+    <form id="cadToWallForm">
+      <label>سماكة الجدار (م)<input id="cadWallThickness" type="number" min="0.01" max="1000" step="any" required></label>
+      <label>ارتفاع الجدار (م)<input id="cadWallHeight" type="number" min="0.01" max="1000" step="any" required></label>
+      <button type="submit">إنشاء الجدار على هذا المحور</button>
+    </form>
+  </details>
   <div id="openingPanel" hidden>
     <h3>الأبواب والنوافذ</h3>
     <label>الفتحة<select id="openingIndex"></select></label>
