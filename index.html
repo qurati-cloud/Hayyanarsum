@@ -171,7 +171,12 @@
       <label>ما الذي تريد بناءه؟<textarea id="briefDescription" maxlength="4000" rows="6" required placeholder="فيلا في الرياض من طابقين و٤ غرف نوم. عرض الأرض ٢٠ متر، وعمق الأرض ٣٠ متر."></textarea></label>
       <p>يمكنك كتابة كل فراغ في سطر مستقل، مثل «مجلس: ٤٫٥ × ٦ م». إذا لم تعرف الأبعاد، اكتب «مطبخ:» وأكملها بعد الاستخراج.</p>
       <button type="submit" class="primary">استخراج البيانات المذكورة</button>
-      <p class="muted">استخراج الوصف يعمل بقواعد محلية. يمكنك معاينة توزيع هندسي أولي من المدخلات أدناه.</p>
+      <p class="muted">استخراج البيانات والأبعاد يعمل بقواعد محلية. يمكنك معاينة توزيع هندسي أولي من المدخلات أدناه.</p>
+      <div id="briefAiControls" hidden>
+        <button type="button" id="briefAiCity">اقترح المدينة باستخدام AI المحلي</button>
+        <p id="briefAiStatus" role="status"></p>
+        <button type="button" id="briefAiApply" hidden>استخدم المدينة المقترحة</button>
+      </div>
     </form>
     <form id="briefReviewForm" class="panel">
       <h2>راجع بيانات المشروع</h2>

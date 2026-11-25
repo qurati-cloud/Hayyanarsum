@@ -1195,6 +1195,71 @@ const briefField = key => briefReview.elements.namedItem(key);
 let briefConflicts = [];
 const manuallyEditedBriefFields = new Set();
 let manuallyEditedBriefRooms = false;
+let citySuggestion;
+let cityRequest;
+const aiCityButton = $('briefAiCity');
+const aiCityStatus = $('briefAiStatus');
+const aiCityApply = $('briefAiApply');
+$('briefAiControls').hidden = !document.querySelector('meta[name="brief-ai"][content="ollama"]');
+
+function clearCitySuggestion() {
+  cityRequest?.abort();
+  cityRequest = undefined;
+  citySuggestion = undefined;
+  aiCityButton.disabled = false;
+  aiCityStatus.textContent = '';
+  aiCityApply.hidden = true;
+}
+
+$('briefDescription').oninput = () => {
+  clearCitySuggestion();
+  clearBriefPlan();
+};
+
+aiCityButton.onclick = async () => {
+  const description = $('briefDescription').value;
+  if (!$('briefDescription').reportValidity() || !description.trim()) return;
+  clearCitySuggestion();
+  const { data, conflicts } = extractBrief(description);
+  const city = briefField('city');
+  if (city.value.trim() || data.city || conflicts.includes('city')) {
+    aiCityStatus.textContent = 'راجع المدينة في الحقول أدناه أو استخدم الاستخراج المحلي أولًا.';
+    return;
+  }
+  const controller = new AbortController();
+  cityRequest = controller;
+  aiCityButton.disabled = true;
+  aiCityStatus.textContent = 'جارٍ البحث عن اسم المدينة في الوصف.';
+  try {
+    const response = await fetch('/api/brief-city', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error('AI unavailable');
+    const result = await response.json();
+    if (cityRequest !== controller) return;
+    citySuggestion = result.city;
+    aiCityStatus.textContent = citySuggestion ? 'المدينة المقترحة للمراجعة: ' + citySuggestion :
+      'لم يتوفر اقتراح موثّق من نص الوصف. اكتب المدينة في الحقل أدناه.';
+    aiCityApply.hidden = !citySuggestion;
+  } catch {
+    if (cityRequest === controller) aiCityStatus.textContent =
+      'تعذّر الاتصال بنموذج AI المحلي. يمكنك متابعة الاستخراج المحلي وتعبئة المدينة يدويًا.';
+  } finally {
+    if (cityRequest === controller) {
+      cityRequest = undefined;
+      aiCityButton.disabled = false;
+    }
+  }
+};
+
+aiCityApply.onclick = () => {
+  if (!citySuggestion || briefField('city').value.trim()) return;
+  briefField('city').value = citySuggestion;
+  briefField('city').dispatchEvent(new Event('input', { bubbles: true }));
+};
 function readBriefFields() {
   return cleanBrief(Object.fromEntries(Object.keys(briefFields).map(key => {
     const field = briefField(key);
@@ -1210,6 +1275,7 @@ function renderBriefQuestions() {
   }));
 }
 function loadBriefForm() {
+  clearCitySuggestion();
   const saved = S.project.brief ?? {};
   $('briefDescription').value = saved.description ?? '';
   for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
@@ -1231,13 +1297,15 @@ function loadBriefForm() {
 }
 $('briefExtractForm').onsubmit = event => {
   event.preventDefault();
+  clearCitySuggestion();
   const description = $('briefDescription').value;
   const { data, conflicts } = extractBrief(description);
   const rooms = extractBriefRooms(description);
-  if (rooms.length && !manuallyEditedBriefRooms) {
+  if (!manuallyEditedBriefRooms) {
     $('briefRoomList').replaceChildren();
     for (const room of rooms) addBriefRoom(room);
-    $('briefLayoutMode').value = 'custom';
+    $('briefLayoutMode').value = rooms.length ? 'custom' : 'bedrooms';
+    $('briefAddRoom').disabled = rooms.length >= 100;
     updateBriefLayoutMode();
   }
   briefConflicts = conflicts;
@@ -1257,6 +1325,7 @@ briefReview.oninput = event => {
   const key = event.target.name;
   if (!Object.hasOwn(briefFields, key)) return;
   manuallyEditedBriefFields.add(key);
+  if (key === 'city') clearCitySuggestion();
   briefConflicts = briefConflicts.filter(item => item !== key);
   $('briefStatus').textContent = '';
   clearBriefPlan();
