@@ -75,7 +75,15 @@ def validate_export():
     cut = cut_model.geometry.verts
     assert math.isclose(min(cut[0::3]), 2) and math.isclose(max(cut[0::3]), 3)
     assert math.isclose(min(cut[1::3]), -5.5) and math.isclose(max(cut[1::3]), -3.5)
-    print("Validated IFC4 storeys, hosted openings, and 3.6 m³ net slab after cutting the stair void.")
+    for element, name, resistance in [(wall, "Pset_WallCommon", .67), (slab, "Pset_SlabCommon", 1.42)]:
+        pset, = [relation.RelatingPropertyDefinition for relation in element.IsDefinedBy
+                 if relation.RelatingPropertyDefinition.Name == name]
+        prop, = pset.HasProperties
+        assert prop.Name == "ThermalTransmittance"
+        assert prop.Unit.UnitType == "THERMALTRANSMITTANCEUNIT"
+        assert prop.NominalValue.is_a("IfcThermalTransmittanceMeasure")
+        assert math.isclose(prop.NominalValue.wrappedValue, 1 / resistance)
+    print("Validated IFC4 geometry, opening volumes, and thermal properties with their units.")
 
 
 if __name__ == "__main__":

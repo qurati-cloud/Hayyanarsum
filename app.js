@@ -1,11 +1,12 @@
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
-import { cleanAssembly, cleanThermalAssemblies, compareAssembly, evaluateAssembly, thermalKinds } from './thermal.js';
+import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
+  evaluateEnvelopeElement, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type!=='wall'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type!=='wall'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type!=='wall'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
-function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=s.type!=='wall'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(s.type==='wall'?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type !== 'wall'); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels(); renderSlabEditor()}
+function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=s.type!=='wall'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(s.type==='wall'?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type !== 'wall'); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels(); renderSlabEditor();renderThermalAssignment(); renderEnvelope()}
 const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);
 const itemLabel = shape => S.levels.length === 1 ? shape.name : shape.name + ' · ' + elementLevel(shape, S.levels)?.name;
 const quantityFor = shape => shape.type === 'wall' ? length(shape) : shape.type === 'slab' ? slabNetArea(shape) : area(shape);
@@ -497,6 +498,52 @@ const thermalFields = {
 };
 const thermalLabel = value => value.toLocaleString('ar-SA', { maximumSignificantDigits: 5 });
 const thermalList = () => S.project.thermal ?? [];
+const selectedThermalElement = () => S.shapes.find(shape => shape.id === S.selected && elementThermalKind(shape));
+function envelopeResults() {
+  const assemblies = new Map(thermalList().map(assembly => [assembly.id, assembly]));
+  return S.shapes.flatMap(shape => {
+    const result = evaluateEnvelopeElement(shape, assemblies);
+    return result ? [{ shape, ...result }] : [];
+  });
+}
+
+function renderThermalAssignment() {
+  const shape = selectedThermalElement();
+  $('elementThermalPanel').hidden = !shape;
+  if (!shape) return;
+  const compatible = thermalList().filter(assembly => assembly.kind === elementThermalKind(shape));
+  const selector = $('elementThermal');
+  selector.replaceChildren(new Option('غير مرتبط', ''), ...compatible.map(assembly => new Option(assembly.name, assembly.id)));
+  selector.value = compatible.some(assembly => assembly.id === shape.thermalId) ? shape.thermalId : '';
+  selector.disabled = !compatible.length;
+  $('elementThermalNote').textContent = compatible.length
+    ? 'اربط العنصر فقط إذا كان جزءًا مصمتًا من الغلاف الخارجي، ثم احفظ المشروع.'
+    : 'احفظ تجميعة من النوع المناسب في حاسبة العزل لإتاحتها هنا.';
+}
+$('elementThermal').onchange = event => {
+  const shape = selectedThermalElement();
+  const thermalId = event.target.value;
+  if (!shape || (thermalId && !thermalList().some(assembly => assembly.id === thermalId &&
+      assembly.kind === elementThermalKind(shape)))) return;
+  commit();
+  S.shapes = S.shapes.map(element => element.id === shape.id ? { ...element, thermalId } : element);
+  renderThermalAssignment();
+  renderEnvelope();
+};
+function renderEnvelope() {
+  const results = envelopeResults();
+  $('envelopePanel').hidden = !results.length;
+  const rows = $('envelopeRows');
+  rows.replaceChildren();
+  for (const entry of results) {
+    const row = rows.insertRow();
+    for (const value of [itemLabel(entry.shape), entry.assembly.name, thermalLabel(entry.area),
+      thermalLabel(entry.transmittance), thermalLabel(entry.conductance)]) row.insertCell().textContent = value;
+  }
+  const total = results.reduce((sum, entry) => sum + entry.conductance, 0);
+  $('envelopeTotal').textContent = 'مجموع U × A للأجزاء المصمتة المرتبطة: ' + thermalLabel(total) +
+    ' W/K. تُخصم الفتحات من المساحة. يتطلب تقدير حمل المبنى بقية مكونات الغلاف والتهوية والمناخ.';
+}
 function thermalComparisonText(assembly, city) {
   const comparison = compareAssembly(assembly, city);
   if (comparison.status === 'pending') return 'أكّد مرجع الحد وطابق مدينته مع المدينة المحفوظة للمشروع.';
@@ -604,6 +651,11 @@ $('thermalForm').onsubmit = event => {
     return;
   }
   const previous = thermalList();
+  if (assembly.id && S.shapes.some(shape => shape.thermalId === assembly.id) &&
+    previous.find(entry => entry.id === assembly.id)?.kind !== assembly.kind) {
+    $('thermalStatus').textContent = 'نوع التجميعة مستخدم في النموذج. احفظ النوع الجديد كتجميعة مستقلة.';
+    return;
+  }
   if (!assembly.id && previous.length >= 100) {
     $('thermalStatus').textContent = 'بلغ المشروع الحد الأقصى للتجميعات المحفوظة.';
     return;
@@ -612,6 +664,8 @@ $('thermalForm').onsubmit = event => {
     : [...previous, { ...assembly, id: crypto.randomUUID() }];
   S.project.thermal = saved;
   loadThermalForm(assembly.id || saved.at(-1).id);
+  renderThermalAssignment();
+  renderEnvelope();
   try {
     localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
     $('thermalStatus').textContent = 'حُسبت التجميعة وحُفظت في المشروع.';
@@ -680,6 +734,12 @@ $('exportSaudiReview').onclick = () => {
         result.transmittance, thermalComparisonText(assembly, city)]);
     }
   }
+  const envelope = envelopeResults();
+  if (envelope.length) {
+    rows.push([], ['عنصر الغلاف', 'تجميعة العزل', 'المساحة المصمتة (م²)', 'U (W/m²·K)', 'U × A (W/K)']);
+    for (const entry of envelope) rows.push([itemLabel(entry.shape), entry.assembly.name, entry.area, entry.transmittance, entry.conductance]);
+    rows.push(['المجموع للعناصر المرتبطة', '', '', '', envelope.reduce((sum, entry) => sum + entry.conductance, 0)]);
+  }
   dl('hayyanarsum-saudi-review.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
 for (const source of saudiSources) {
@@ -711,11 +771,12 @@ function readProject(data) {
     const level = elementLevel(shape, levels);
     if (!level) throw new TypeError('Unknown element storey');
     const levelId = level.id;
+    const thermalId = typeof shape.thermalId === 'string' ? shape.thermalId.slice(0, 80) : '';
     const { id, type, name, layer, x, y, w, h, z, x2, y2, thickness, openings, cutouts } = shape;
-    return type !== 'wall' ? { id, type, name: name.slice(0, 160), layer, levelId, x, y, w, h, z,
+    return type !== 'wall' ? { id, type, name: name.slice(0, 160), layer, levelId, x, y, w, h, z, thermalId,
       ...(type === 'room' ? residentialRoomMetadata(shape.roomUse, shape.clearRoom) : {}),
       cutouts: type === 'slab' ? cutouts?.map(cut => ({ x: cut.x, y: cut.y, w: cut.w, h: cut.h, name: cut.name.trim().slice(0, 120) })) : undefined }
-      : { id, type, name: name.slice(0, 160), layer, levelId, x, y, x2, y2, z, thickness,
+      : { id, type, name: name.slice(0, 160), layer, levelId, x, y, x2, y2, z, thickness, thermalId,
           openings: openings?.map(({ kind, offset, width, sill, height }) => ({ kind, offset, width, sill, height })) };
   });
   const project = {};
@@ -758,7 +819,7 @@ function updateIfcExport() {
 }
 $('exportIFC').onclick = () => {
   try {
-    dl('hayyanarsum.ifc', exportIfc(S.shapes, S.project.name, S.levels), 'application/x-step');
+    dl('hayyanarsum.ifc', exportIfc(S.shapes, S.project.name, S.levels, thermalList()), 'application/x-step');
     $('ifcStatus').textContent = 'جُهّز ملف IFC4 لعناصر المبنى.';
   } catch {
     $('ifcStatus').textContent = 'تعذّر إنشاء ملف IFC. تحقق من أبعاد الجدران والفتحات.';

@@ -1,7 +1,11 @@
+import { slabNetArea, valid, wallQuantities } from './engine.js';
+
 const text = (value, max = 180) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const number = value => Number.isFinite(value) ? value : null;
 const positive = value => Number.isFinite(value) && value > 0;
 export const thermalKinds = { wall: 'جدار خارجي', roof: 'سقف خارجي' };
+export const elementThermalKind = shape => shape.type === 'wall' && shape.thickness != null ? 'wall'
+  : shape.type === 'slab' ? 'roof' : null;
 
 export function cleanAssembly(value = {}) {
   const input = value && typeof value === 'object' ? value : {};
@@ -53,4 +57,16 @@ export function compareAssembly(assembly, city) {
   const difference = result.transmittance - assembly.target;
   const within = difference <= Number.EPSILON * Math.max(result.transmittance, assembly.target) * 4;
   return { status: 'reference', within, difference, reference: assembly.reference };
+}
+
+export function evaluateEnvelopeElement(shape, assemblies) {
+  if (!shape.thermalId || !valid(shape)) return null;
+  const assembly = assemblies.get(shape.thermalId);
+  if (!assembly || assembly.kind !== elementThermalKind(shape)) return null;
+  const result = evaluateAssembly(assembly);
+  if (!result) return null;
+  const area = assembly.kind === 'wall' ? wallQuantities(shape).netArea : slabNetArea(shape);
+  const conductance = area * result.transmittance;
+  if (!Number.isFinite(conductance)) return null;
+  return { assembly, area, transmittance: result.transmittance, conductance };
 }
