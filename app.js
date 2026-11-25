@@ -1383,6 +1383,7 @@ function clearBriefPlan() {
   briefPlan = undefined;
   $('insertBriefPlan').disabled = true;
   $('exportBriefDxf').disabled = true;
+  $('refineBriefPositions').hidden = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
   $('briefPlanRooms').hidden = true;
@@ -1594,6 +1595,13 @@ $('briefLayoutForm').onsubmit = event => {
   const empty = briefTargetIsEmpty();
   $('insertBriefPlan').disabled = !empty;
   $('exportBriefDxf').disabled = false;
+  if ($('briefLayoutMode').value === 'custom' && !layout.coordinates) {
+    const refine = $('refineBriefPositions');
+    const existing = Array.from($('briefRoomList').querySelectorAll('[data-room-placement] input'))
+      .some(field => field.value.trim());
+    refine.textContent = existing ? 'استبدل الإحداثيات بمواقع المعاينة' : 'عدّل مواقع الفراغات المقترحة';
+    refine.hidden = false;
+  }
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
     thermalLabel(plan.rooms.length) + ' فراغات. ' +
     (layout.automatic ? 'الحد الأقصى للفراغات في الصف المقترح ' + thermalLabel(plan.columns) + '. ' : '') +
@@ -1601,6 +1609,25 @@ $('briefLayoutForm').onsubmit = event => {
       thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
     (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
       'اختر طابق رسم فارغًا ثم أعد المعاينة للإضافة.');
+};
+$('refineBriefPositions').onclick = () => {
+  if (!briefPlan || $('briefLayoutMode').value !== 'custom' || $('briefPlacement').value === 'coordinates') return;
+  const rows = [...$('briefRoomList').children];
+  if (rows.length !== briefPlan.rooms.length) {
+    clearBriefPlan();
+    $('briefPlanStatus').textContent = 'تغيّرت قائمة الفراغات. أعد المعاينة.';
+    return;
+  }
+  rows.forEach((row, index) => {
+    const { x, y } = briefPlan.rooms[index];
+    row.querySelector('[data-room="x"]').value = x;
+    row.querySelector('[data-room="y"]').value = y;
+  });
+  manuallyEditedBriefRooms = true;
+  $('briefPlacement').value = 'coordinates';
+  updateBriefPlacement();
+  $('briefPlanStatus').textContent = 'نُقلت المواقع كما ظهرت في المعاينة. عدّل الإحداثيات ثم أعد المعاينة قبل الإدراج أو التنزيل.';
+  rows[0].querySelector('[data-room="x"]').focus();
 };
 $('exportBriefDxf').onclick = () => {
   if (!briefPlan) return;

@@ -269,3 +269,26 @@ test('saved room data accepts zero and valid coordinates without inventing missi
     { name: 'مطبخ', roomUse: 'kitchen', w: 2, h: 2 },
   ]);
 });
+
+test('generated row coordinates can seed a customized preview without changing the geometry', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const brief = { frontage: 13, depth: 14 };
+  const setbacks = { left: 1.25, right: 2, front: 2.5, rear: 1 };
+  const source = [
+    { name: 'مجلس', roomUse: 'living', w: 5.2, h: 4.1 },
+    { name: 'مطبخ', roomUse: 'kitchen', w: 4.1, h: 3 },
+    { name: 'مخزن', roomUse: '', w: 3.2, h: 2.4 },
+  ];
+  const suggested = customRoomBlockPlan(brief, { automatic: true, setbacks }, source);
+  assert.equal(suggested.columns, 2);
+  const coordinates = source.map((room, index) => ({
+    ...room, x: suggested.rooms[index].x, y: suggested.rooms[index].y,
+  }));
+  const direct = customRoomBlockPlan(brief, { coordinates: true, setbacks }, coordinates);
+  assert.deepEqual(direct.rooms, suggested.rooms);
+  assert.deepEqual(direct.references, suggested.references);
+  coordinates[2].x += 5;
+  const adjusted = customRoomBlockPlan(brief, { coordinates: true, setbacks }, coordinates);
+  assert.equal(adjusted.rooms[2].x, 6.25);
+  assert.deepEqual(adjusted.rooms.slice(0, 2), suggested.rooms.slice(0, 2));
+});
