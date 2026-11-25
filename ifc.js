@@ -4,14 +4,14 @@ import { evaluateEnvelopeElement, evaluateEnvelopeOpening } from './thermal.js';
 const ifcAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 const missing = '$';
 
-function globalId(uuid = crypto.randomUUID()) {
+function compressGuid(uuid) {
   let value = BigInt('0x' + uuid.replaceAll('-', ''));
   let result = '';
   for (let index = 0; index < 22; index++) {
     result = ifcAlphabet[Number(value & 63n)] + result;
     value >>= 6n;
   }
-  return "'" + result + "'";
+  return result;
 }
 
 function stepString(value) {
@@ -38,6 +38,9 @@ function real(value) {
 const tuple = values => '(' + values.join(',') + ')';
 const mode = '.ELEMENT.';
 const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+export const ifcElementGuid = id => typeof id === 'string' && uuidPattern.test(id) ? compressGuid(id) : null;
+const globalId = guid => "'" + (guid ?? compressGuid(crypto.randomUUID())) + "'";
 
 export const isIfcWall = shape => shape?.type === 'wall' && shape.thickness != null && valid(shape);
 export const isIfcSlab = shape => shape?.type === 'slab' && valid(shape);
@@ -132,7 +135,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
     // Map the screen's downward Y into IFC's upward Y, preserving the start and orientation.
     const axis = direction([(wall.x2 - wall.x) / width, (wall.y - wall.y2) / width, 0]);
     const pose = local(storey.placement, wall.x, -wall.y, 0, axis);
-    const stableId = uuidPattern.test(wall.id) ? wall.id : undefined;
+    const stableId = ifcElementGuid(wall.id);
     const wallRef = entity('IFCWALL', ...root(wall.name || 'Wall', stableId), missing, pose,
       box(width, wall.thickness, wall.z), stepString(wall.id || ''), '.NOTDEFINED.');
     storey.contained.push(wallRef);
@@ -158,7 +161,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
     const storey = spatial.get(elementLevel(slab, storeys)?.id);
     if (!storey) throw new TypeError('Slab refers to an unknown storey');
     const pose = local(storey.placement, slab.x, -(slab.y + slab.h / 2), -slab.z);
-    const stableId = uuidPattern.test(slab.id) ? slab.id : undefined;
+    const stableId = ifcElementGuid(slab.id);
     const ref = entity('IFCSLAB', ...root(slab.name || 'Slab', stableId), missing, pose,
       box(slab.w, slab.h, slab.z), stepString(slab.id || ''), '.FLOOR.');
     storey.contained.push(ref);

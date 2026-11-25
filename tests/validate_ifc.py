@@ -95,4 +95,7 @@ def validate_export():
 
 
 if __name__ == "__main__":
+    from validate_bcf import validate as validate_bcf_export
+
     validate_export()
+    validate_bcf_export()

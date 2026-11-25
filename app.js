@@ -1,3 +1,4 @@
+import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
@@ -358,7 +359,7 @@ $('editRoom').onclick = () => {
   render();
 };
 $('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());clearCoordination();loadTransmissionForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());clearCoordination();loadTransmissionForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
-function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('exportSVG').onclick=()=>dl('hayyanarsum.svg',new XMLSerializer().serializeToString($('svg')),'image/svg+xml');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
+function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob ? t : new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('exportSVG').onclick=()=>dl('hayyanarsum.svg',new XMLSerializer().serializeToString($('svg')),'image/svg+xml');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 const csvCell = value => {
   const raw = String(value);
   const safeValue = typeof value === 'string' && /^[\s\uFEFF]*[=+@-]/.test(raw) ? "'" + raw : raw;
@@ -371,6 +372,8 @@ function clearCoordination() {
   $('coordinationRows').replaceChildren();
   $('coordinationTable').hidden = true;
   $('exportCoordination').disabled = true;
+  $('exportCoordinationBcf').disabled = true;
+  $('coordinationExportStatus').textContent = '';
   $('coordinationStatus').textContent = 'تغيّرت بيانات المشروع. أعد الفحص لتحديث النتائج.';
 }
 
@@ -401,6 +404,8 @@ $('runCoordination').onclick = () => {
   $('coordinationTable').hidden = pairs.length === 0;
   const checked = walls && slabs;
   $('exportCoordination').disabled = !checked;
+  $('exportCoordinationBcf').disabled = pairs.length === 0;
+  $('coordinationExportStatus').textContent = '';
   const outcome = !checked ? 'أضف جدارًا وبلاطة بأبعاد مجسّمة لبدء المقارنة.'
     : complete ? 'حالات التداخل: ' + pairs.length + '.' : 'الفحص جزئي. الحالات المعروضة: ' + pairs.length + '.';
   $('coordinationStatus').textContent = outcome + ' الجدران المؤهلة: ' + walls + ' · البلاطات المؤهلة: ' + slabs +
@@ -419,6 +424,19 @@ $('exportCoordination').onclick = () => {
   }
   dl('hayyanarsum-coordination.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'),
     'text/csv;charset=utf-8');
+};
+
+$('exportCoordinationBcf').onclick = () => {
+  if (!coordination?.pairs.length) return;
+  try {
+    const { archive, unlinked } = exportCoordinationBcf(coordination, S.levels, S.project.name);
+    dl('hayyanarsum-coordination.bcf', archive);
+    $('coordinationExportStatus').textContent = unlinked
+      ? 'جُهّز ملف BCF. ملاحظات نصية بلا ربط IFC: ' + unlinked + '.'
+      : 'جُهّز ملف BCF. استخدم معه ملف IFC4 من نسخة المشروع نفسها.';
+  } catch {
+    $('coordinationExportStatus').textContent = 'تعذّر تجهيز ملف BCF. يمكنك تنزيل التقرير بصيغة CSV.';
+  }
 };
 
 $('csv').onclick = () => {
