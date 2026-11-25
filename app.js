@@ -1,10 +1,11 @@
+import { wallSlabClashes } from './coordination.js';
 import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
 import{snap,area,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
-const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[]};
+const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[];clearCoordination()};
 function dimension(s){const g=$('dims'),t=el('text',{x:(s.type!=='wall'?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(s.type!=='wall'?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(s.type!=='wall'?s.w:length(s)).toFixed(2)+' m';g.append(t)}
 function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=s.type!=='wall'?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':6,class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(s.type==='wall'?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && shape.type !== 'wall'); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels(); renderSlabEditor();renderThermalAssignment(); renderEnvelope()}
 const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);
@@ -356,13 +357,70 @@ $('editRoom').onclick = () => {
   $('mode').textContent = current.type === 'slab' ? 'حُدّثت البلاطة المحددة.' : 'حُدّثت المساحة المحددة.';
   render();
 };
-$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());loadTransmissionForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());loadTransmissionForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
+$('insert').onclick=()=>S.tool==='slab'?addRectangle('slab',numberField('slabX'),numberField('slabY')):addRectangle('room',2,2);$('remove').onclick=()=>{if(!S.selected)return;commit();S.shapes=S.shapes.filter(x=>x.id!==S.selected);S.selected=null;render()};$('undo').onclick=()=>{if(past.length){next.push(JSON.stringify(S));S=JSON.parse(past.pop());clearCoordination();loadTransmissionForm();render()}};$('redo').onclick=()=>{if(next.length){past.push(JSON.stringify(S));S=JSON.parse(next.pop());clearCoordination();loadTransmissionForm();render()}};$('gridBtn').onclick=()=>{$('gridRect').hidden=!$('gridRect').hidden;$('gridBtn').classList.toggle('active',!$('gridRect').hidden)};
 function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}$('save').onclick=()=>{localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('mode').textContent='تم الحفظ على هذا الجهاز'};$('exportJSON').onclick=()=>dl('hayyanarsum-project.json',JSON.stringify(S,null,2),'application/json');$('exportDXF').onclick=()=>dl('hayyanarsum.dxf',dxf(levelShapes()),'application/dxf');$('exportSVG').onclick=()=>dl('hayyanarsum.svg',new XMLSerializer().serializeToString($('svg')),'image/svg+xml');$('importJSON').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());const project = readProject(x); commit(); S = project; loadProjectFields(); render()}catch{alert('ملف غير صالح')}finally{e.target.value=''}};$('boq').onchange=e=>{if(e.target.classList.contains('rate')){const rate=Number(e.target.value); if(Number.isFinite(rate)&&rate>=0&&rate<=1e12){commit();S.prices[e.target.dataset.id]=rate}boq()}};
 const csvCell = value => {
   const raw = String(value);
   const safeValue = typeof value === 'string' && /^[\s\uFEFF]*[=+@-]/.test(raw) ? "'" + raw : raw;
   return '"' + safeValue.replaceAll('"', '""') + '"';
 };
+let coordination;
+function clearCoordination() {
+  if (!coordination) return;
+  coordination = undefined;
+  $('coordinationRows').replaceChildren();
+  $('coordinationTable').hidden = true;
+  $('exportCoordination').disabled = true;
+  $('coordinationStatus').textContent = 'تغيّرت بيانات المشروع. أعد الفحص لتحديث النتائج.';
+}
+
+function coordinationSelection(cell, shape) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = itemLabel(shape);
+  button.onclick = () => {
+    S.activeLevel = elementLevel(shape, S.levels).id;
+    document.querySelector('[data-tool="select"]').click();
+    selectShape(shape.id);
+    $('activeLevel').focus();
+  };
+  cell.append(button);
+}
+
+$('runCoordination').onclick = () => {
+  coordination = wallSlabClashes(S.shapes, S.levels);
+  const { pairs, omitted, walls, slabs, complete } = coordination;
+  const rows = $('coordinationRows');
+  rows.replaceChildren();
+  for (const { wall, slab, volume } of pairs) {
+    const row = rows.insertRow();
+    coordinationSelection(row.insertCell(), wall);
+    coordinationSelection(row.insertCell(), slab);
+    row.insertCell().textContent = thermalLabel(volume);
+  }
+  $('coordinationTable').hidden = pairs.length === 0;
+  const checked = walls && slabs;
+  $('exportCoordination').disabled = !checked;
+  const outcome = !checked ? 'أضف جدارًا وبلاطة بأبعاد مجسّمة لبدء المقارنة.'
+    : complete ? 'حالات التداخل: ' + pairs.length + '.' : 'الفحص جزئي. الحالات المعروضة: ' + pairs.length + '.';
+  $('coordinationStatus').textContent = outcome + ' الجدران المؤهلة: ' + walls + ' · البلاطات المؤهلة: ' + slabs +
+    (omitted ? ' · عناصر مستبعدة لنقص بياناتها: ' + omitted : '');
+};
+
+$('exportCoordination').onclick = () => {
+  if (!coordination) return;
+  const rows = [
+    ['تقرير تداخل الجدران والبلاطات', S.project.name ?? ''],
+    ['حالة الفحص', $('coordinationStatus').textContent], ['النطاق', $('coordinationScope').textContent], [],
+    ['معرّف الجدار', 'الجدار', 'معرّف البلاطة', 'البلاطة', 'الحجم المشترك (م³)'],
+  ];
+  for (const { wall, slab, volume } of coordination.pairs) {
+    rows.push([wall.id, itemLabel(wall), slab.id, itemLabel(slab), volume]);
+  }
+  dl('hayyanarsum-coordination.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'),
+    'text/csv;charset=utf-8');
+};
+
 $('csv').onclick = () => {
   const rows = [['العنصر','الطبقة','الكمية','الوحدة','سعر الوحدة','الإجمالي']];
   for (const shape of S.shapes) {
