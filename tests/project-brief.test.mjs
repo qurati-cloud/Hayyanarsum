@@ -232,3 +232,40 @@ test('the preview exports metric room and lot outlines without mutating the plan
      [4.75, 4.75, 1.25, 4.75], [1.25, 4.75, 1.25, 2.5]]);
   assert.equal(plan.rooms[0].layer, 'A-WALL');
 });
+
+test('coordinate placement allows touching edges and preserves fractional coordinates in the preview and export', async () => {
+  const { briefPreviewDxf, customRoomBlockPlan } = await import('../project-brief.js');
+  const { readDxf } = await import('../dxf-import.js');
+  const lot = { frontage: 12, depth: 16 };
+  const layout = { coordinates: true, setbacks: { left: 1, right: 2, front: 2, rear: 2 } };
+  const rooms = [
+    { name: 'مجلس', w: 3.25, h: 4, x: 1.1, y: 2 },
+    { name: 'مطبخ', w: 2, h: 3, x: 4.35, y: 3.5 },
+    { name: 'مخزن', w: 2, h: 2, x: 8, y: 11.75 },
+  ];
+  const plan = customRoomBlockPlan(lot, layout, rooms);
+  assert.deepEqual(plan.rooms.map(({ x, y, w, h }) => ({ x, y, w, h })),
+    rooms.map(({ x, y, w, h }) => ({ x, y, w, h })));
+  const { lines } = readDxf(briefPreviewDxf(plan));
+  assert.deepEqual(lines.filter(line => line.cadLayer === 'A-ROOM').filter((_, i) => i % 4 === 0)
+    .map(({ x, y }) => [x, y]), [[1.1, 2], [4.35, 3.5], [8, 11.75]]);
+  assert.deepEqual(customRoomBlockPlan(lot, layout, [rooms[0], { ...rooms[1], x: 4.34 }]),
+    { error: 'room-overlap', names: ['مجلس', 'مطبخ'] });
+  assert.deepEqual(customRoomBlockPlan(lot, layout, [{ ...rooms[0], y: 1.99 }]),
+    { error: 'outside-setbacks', names: ['مجلس'] });
+  assert.deepEqual(customRoomBlockPlan(lot, layout, [{ ...rooms[0], x: undefined }]),
+    { error: 'coordinates', names: ['مجلس'] });
+  assert.deepEqual(customRoomBlockPlan(lot, { coordinates: true }, [{ ...rooms[0], x: 10 }]),
+    { error: 'outside', names: ['مجلس'] });
+});
+
+test('saved room data accepts zero and valid coordinates without inventing missing positions', async () => {
+  const { cleanBriefRooms } = await import('../project-brief.js');
+  assert.deepEqual(cleanBriefRooms([
+    { name: 'صالة', roomUse: 'living', w: 3, h: 4, x: 0, y: 2.125 },
+    { name: 'مطبخ', roomUse: 'kitchen', w: 2, h: 2, x: '0', y: -1 },
+  ]), [
+    { name: 'صالة', roomUse: 'living', w: 3, h: 4, x: 0, y: 2.125 },
+    { name: 'مطبخ', roomUse: 'kitchen', w: 2, h: 2 },
+  ]);
+});

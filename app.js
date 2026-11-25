@@ -1300,6 +1300,8 @@ function loadBriefForm() {
   $('briefRoomList').replaceChildren();
   for (const room of rooms) addBriefRoom(room);
   $('briefLayoutMode').value = rooms.length ? 'custom' : 'bedrooms';
+  if (rooms.length && saved.positionRooms) $('briefPlacement').value = 'coordinates';
+  else if ($('briefPlacement').value === 'coordinates') $('briefPlacement').value = 'automatic';
   manuallyEditedBriefRooms = rooms.length > 0;
   $('briefAddRoom').disabled = rooms.length >= 100;
   updateBriefLayoutMode();
@@ -1366,7 +1368,8 @@ briefReview.onsubmit = event => {
   }
   commit();
   S.project.brief = { description: $('briefDescription').value.trim(), fields,
-    rooms: cleanBriefRooms(briefCustomRooms()), setbacks: readBriefSetbacks() };
+    rooms: cleanBriefRooms(briefCustomRooms()), setbacks: readBriefSetbacks(),
+    positionRooms: $('briefPlacement').value === 'coordinates' };
   try {
     localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
     $('briefStatus').textContent = 'حُفظت المسودة في المشروع على هذا الجهاز.';
@@ -1455,6 +1458,9 @@ function addBriefRoom(room = {}) {
     '<label>الاستخدام<select data-room="use"><option value="">غير محدد</option></select></label></div>' +
     '<div class="two"><label>العرض (م)<input data-room="width" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>' +
     '<label>العمق (م)<input data-room="depth" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label></div>' +
+    '<div class="two" data-room-placement hidden>' +
+    '<label>موضع X (م)<input data-room="x" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required disabled></label>' +
+    '<label>موضع Y (م)<input data-room="y" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required disabled></label></div>' +
     '<p data-room-feedback class="muted" hidden></p><button type="button">إزالة الفراغ</button>';
   const use = row.querySelector('select');
   for (const [value, option] of Object.entries(residentialSpaceRules)) use.add(new Option(option.label, value));
@@ -1462,6 +1468,9 @@ function addBriefRoom(room = {}) {
   use.value = room.roomUse ?? '';
   row.querySelector('[data-room="width"]').value = room.w ?? '';
   row.querySelector('[data-room="depth"]').value = room.h ?? '';
+  row.querySelector('[data-room="x"]').value = room.x ?? '';
+  row.querySelector('[data-room="y"]').value = room.y ?? '';
+  updateBriefRoomPosition(row, $('briefPlacement').value === 'coordinates');
   updateBriefRoomFeedback(row);
   row.querySelector('button').onclick = () => {
     row.remove();
@@ -1478,7 +1487,8 @@ function briefCustomRooms() {
   return [...$('briefRoomList').children].map(row => {
     const field = name => row.querySelector('[data-room="' + name + '"]');
     return { name: field('name').value, roomUse: field('use').value,
-      w: numericValue(field('width')), h: numericValue(field('depth')) };
+      w: numericValue(field('width')), h: numericValue(field('depth')),
+      x: numericValue(field('x')), y: numericValue(field('y')) };
   });
 }
 
@@ -1487,8 +1497,10 @@ function updateBriefLayoutMode() {
   const custom = $('briefLayoutMode').value === 'custom';
   $('briefBedroomFields').hidden = $('briefBedroomFields').disabled = custom;
   $('briefCustomFields').hidden = $('briefCustomFields').disabled = !custom;
+  $('briefPositionOption').hidden = $('briefPositionOption').disabled = !custom;
+  if (!custom && $('briefPlacement').value === 'coordinates') $('briefPlacement').value = 'automatic';
   if (custom && !$('briefRoomList').children.length) addBriefRoom();
-  clearBriefPlan();
+  updateBriefPlacement();
 }
 function readBriefSetbacks() {
   if (!$('briefUseSetbacks').checked) return null;
@@ -1512,11 +1524,19 @@ $('briefUseSetbacks').onchange = () => {
   clearBriefPlan();
 };
 $('briefLayoutMode').onchange = updateBriefLayoutMode;
-$('briefPlacement').onchange = () => {
-  const automatic = $('briefPlacement').value === 'automatic';
-  $('briefManualPlacement').hidden = $('briefManualPlacement').disabled = automatic;
+function updateBriefRoomPosition(row, active) {
+  const fields = row.querySelector('[data-room-placement]');
+  fields.hidden = !active;
+  for (const input of fields.querySelectorAll('input')) input.disabled = !active;
+}
+function updateBriefPlacement() {
+  const mode = $('briefPlacement').value;
+  $('briefManualPlacement').hidden = $('briefManualPlacement').disabled = mode !== 'manual';
+  $('briefPositionHelp').hidden = mode !== 'coordinates';
+  for (const row of $('briefRoomList').children) updateBriefRoomPosition(row, mode === 'coordinates');
   clearBriefPlan();
-};
+}
+$('briefPlacement').onchange = updateBriefPlacement;
 $('briefLayoutForm').oninput = event => {
   if (event.target.matches('[data-room]')) {
     manuallyEditedBriefRooms = true;
@@ -1538,6 +1558,7 @@ $('briefLayoutForm').onsubmit = event => {
   const brief = readBriefFields();
   const layout = {
     automatic: $('briefPlacement').value === 'automatic',
+    coordinates: $('briefPlacement').value === 'coordinates',
     columns: numberField('briefLayoutColumns'), x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
     setbacks: readBriefSetbacks(),
   };
@@ -1549,10 +1570,17 @@ $('briefLayoutForm').onsubmit = event => {
     });
   const status = $('briefPlanStatus');
   if (plan.error) {
+    if (plan.names && !['coordinates', 'room-overlap'].includes(plan.error)) {
+      status.textContent = (plan.error === 'outside-setbacks' ? 'يتجاوز الفراغ حدود الارتدادات: ' :
+        'يتجاوز الفراغ حدود الأرض: ') + plan.names[0];
+      return;
+    }
     status.textContent = {
       brief: 'أكمل عرض الأرض وعمقها. في وضع غرف النوم المتماثلة، أدخل أيضًا عدد غرف النوم في المشروع.',
       'bedroom-count': 'أدخل إجمالي غرف النوم في بيانات المشروع بحيث يشمل غرف هذا الطابق.',
-      layout: layout.automatic ? 'تحقق من أسماء الفراغات وأبعادها.' : 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
+      coordinates: 'تحقّق من إحداثيات الفراغ: ' + plan.names?.[0],
+      'room-overlap': 'يتداخل الفراغان «' + plan.names?.[0] + '» و«' + plan.names?.[1] + '». عدّل موقع أحدهما.',
+      layout: (layout.automatic || layout.coordinates) ? 'تحقق من أسماء الفراغات وأبعادها.' : 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
       'auto-fit': 'تعذر ترتيب الفراغات بهذه الأبعاد وبهذا الترتيب ضمن الحدود المتاحة. راجع الأبعاد أو ترتيب الفراغات.',
       setbacks: 'أدخل قيمة صالحة لكل جهة من جهات الارتداد الأربع.',
       'setback-size': 'الارتدادات المدخلة لا تترك مساحة للتوزيع. راجع أبعاد الأرض والقيم المدخلة.',
@@ -1641,6 +1669,7 @@ function readProject(data) {
       description: typeof brief.description === 'string' ? brief.description.slice(0, 4000) : '',
       fields: cleanBrief(brief.fields),
       rooms: cleanBriefRooms(brief.rooms),
+      positionRooms: brief.positionRooms === true,
       setbacks: cleanSetbacks(brief.setbacks),
     };
   }
