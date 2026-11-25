@@ -1317,6 +1317,7 @@ $('briefExtractForm').onsubmit = event => {
   const description = $('briefDescription').value;
   const { data, conflicts } = extractBrief(description);
   const rooms = extractBriefRooms(description);
+  const containsPositions = rooms.some(room => Object.hasOwn(room, 'x'));
   const { setbacks, conflicts: disputedSetbacks, invalid } = extractBriefSetbacks(description);
   setbackConflicts = disputedSetbacks.filter(side => !manuallyEditedSetbacks.has(side));
   invalidSetbacks = invalid.filter(side => !manuallyEditedSetbacks.has(side));
@@ -1329,6 +1330,8 @@ $('briefExtractForm').onsubmit = event => {
     $('briefRoomList').replaceChildren();
     for (const room of rooms) addBriefRoom(room);
     $('briefLayoutMode').value = rooms.length ? 'custom' : 'bedrooms';
+    if (containsPositions) $('briefPlacement').value = 'coordinates';
+    else if ($('briefPlacement').value === 'coordinates') $('briefPlacement').value = 'automatic';
     $('briefAddRoom').disabled = rooms.length >= 100;
     updateBriefLayoutMode();
   }
@@ -1342,7 +1345,9 @@ $('briefExtractForm').onsubmit = event => {
   const summary = missing ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المشروع الأولية. راجعها قبل الحفظ.';
   const incomplete = rooms.filter(room => !room.w || !room.h).length;
   const setbackSummary = setbacks && $('briefUseSetbacks').checked ? ' راجع الارتدادات في قسم المعاينة.' : '';
-  $('briefStatus').textContent = summary + setbackSummary + (!rooms.length ? '' : manuallyEditedBriefRooms
+  const positionSummary = containsPositions && !manuallyEditedBriefRooms
+    ? ' راجع الإحداثيات في قسم المعاينة وأكمل مواقع الفراغات الناقصة.' : '';
+  $('briefStatus').textContent = summary + setbackSummary + positionSummary + (!rooms.length ? '' : manuallyEditedBriefRooms
     ? ' احتُفظ بقائمة الفراغات التي عدّلتها أو حفظتها.'
     : ' أُضيفت الفراغات المذكورة إلى المعاينة.' + (incomplete ? ' راجع الأبعاد الناقصة أو المتعارضة في ' + incomplete + ' من الفراغات.' : ''));
 };
@@ -1444,6 +1449,13 @@ function updateBriefRoomFeedback(row) {
     const value = numericValue(row.querySelector('[data-room="' + key + '"]'));
     return !Number.isFinite(value) || value <= 0;
   }).map(([, label]) => label);
+  if ($('briefPlacement').value === 'coordinates') {
+    for (const axis of ['x', 'y']) {
+      if (!Number.isFinite(numericValue(row.querySelector('[data-room="' + axis + '"]')))) {
+        missing.push('موضع ' + axis.toUpperCase());
+      }
+    }
+  }
   row.querySelector('legend').textContent = name || 'فراغ جديد';
   const feedback = row.querySelector('[data-room-feedback]');
   feedback.hidden = missing.length === 0;
@@ -1472,7 +1484,6 @@ function addBriefRoom(room = {}) {
   row.querySelector('[data-room="x"]').value = room.x ?? '';
   row.querySelector('[data-room="y"]').value = room.y ?? '';
   updateBriefRoomPosition(row, $('briefPlacement').value === 'coordinates');
-  updateBriefRoomFeedback(row);
   row.querySelector('button').onclick = () => {
     row.remove();
     manuallyEditedBriefRooms = true;
@@ -1529,6 +1540,7 @@ function updateBriefRoomPosition(row, active) {
   const fields = row.querySelector('[data-room-placement]');
   fields.hidden = !active;
   for (const input of fields.querySelectorAll('input')) input.disabled = !active;
+  updateBriefRoomFeedback(row);
 }
 function updateBriefPlacement() {
   const mode = $('briefPlacement').value;

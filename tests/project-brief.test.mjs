@@ -292,3 +292,36 @@ test('generated row coordinates can seed a customized preview without changing t
   assert.equal(adjusted.rooms[2].x, 6.25);
   assert.deepEqual(adjusted.rooms.slice(0, 2), suggested.rooms.slice(0, 2));
 });
+
+test('room descriptions populate explicit metric positions across Arabic, English and French', async () => {
+  const { extractBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const rooms = extractBriefRooms([
+    'مجلس: ٤ × ٥ م؛ الموضع: ٠ × ٢٫٥ م',
+    'Kitchen: 3 by 4 m; position: 4 by 2.5 meters',
+    'Espace Atelier: 2 par 3 mètres; Position: 1,25 par 8 mètres',
+  ].join('\n'));
+  assert.deepEqual(rooms, [
+    { name: 'مجلس', roomUse: 'living', w: 4, h: 5, x: 0, y: 2.5 },
+    { name: 'Kitchen', roomUse: 'kitchen', w: 3, h: 4, x: 4, y: 2.5 },
+    { name: 'Atelier', roomUse: '', w: 2, h: 3, x: 1.25, y: 8 },
+  ]);
+  const result = customRoomBlockPlan({ frontage: 12, depth: 15 }, { coordinates: true }, rooms);
+  assert.deepEqual(result.rooms.map(({ x, y }) => [x, y]), [[0, 2.5], [4, 2.5], [1.25, 8]]);
+});
+
+test('conflicting or unreadable positions leave both axes unresolved without changing dimensions', async () => {
+  const { extractBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const rooms = extractBriefRooms([
+    'Kitchen: 3 × 4 m; position: 2 × 3 m',
+    'Kitchen: 3 × 4 m; position: 2 × 4 m',
+    'Dining room: 4 × 4 m; position: 2 × 3 ft',
+    'Espace Atelier: 2 × 3 m; position:',
+    'مجلس: ٤ × ٥ م',
+    'فراغ مخزن: ٢ × ٢ م؛ الموضع: ١ × ١ م؛ الموضع: ١ × ١ م',
+  ].join('\n'));
+  assert.deepEqual(rooms.map(({ w, h, x, y }) => [w, h, x, y]), [
+    [3, 4, null, null], [4, 4, null, null], [2, 3, null, null], [4, 5, undefined, undefined], [2, 2, 1, 1],
+  ]);
+  const result = customRoomBlockPlan({ frontage: 12, depth: 15 }, { coordinates: true }, rooms);
+  assert.deepEqual(result, { error: 'coordinates', names: ['Kitchen'] });
+});

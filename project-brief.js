@@ -286,11 +286,17 @@ const customRoomPrefix = /^(?:فراغ|space|espace)\s+/iu;
 const roomDimensions = new RegExp('^' + decimal + String.raw`\s*(?:×|x|في|par|by)\s*` +
   decimal + String.raw`\s*` + metricUnit + '\\.?$', 'iu');
 
+const roomPosition = /^\s*(?:الموضع|موضع|position)\s*:\s*(.*?)\s*$/iu;
+
 export function extractBriefRooms(description) {
   const rooms = new Map();
+  const positions = new Map();
   const unresolved = new Set();
   for (const line of description.slice(0, 4000).normalize('NFKC').split(/\r?\n/u)) {
-    const [rawName, rawDimensions, ...extra] = line.split(':');
+    const [roomText, ...positionText] = line.split(/[;؛]/u);
+    const clauses = positionText.map(part => roomPosition.exec(part));
+    if (clauses.some(clause => !clause)) continue;
+    const [rawName, rawDimensions, ...extra] = roomText.split(':');
     if (rawDimensions === undefined || extra.length) continue;
     const label = normalizeNumericInput(rawName.replace(/^\s*[-•]\s*/u, ''));
     const custom = customRoomPrefix.test(label);
@@ -300,6 +306,15 @@ export function extractBriefRooms(description) {
     const kind = key.replace(/\s+\d+$/u, '').trim();
     const use = Object.keys(roomLabels).find(type => roomLabels[type].test(kind));
     if ((!use && !custom) || (!rooms.has(key) && rooms.size >= 100)) continue;
+
+    for (const [, rawPosition] of clauses) {
+      const match = roomDimensions.exec(normalizeNumericInput(rawPosition));
+      const pair = match?.slice(1, 3).map(value => Number(value.replace(',', '.')));
+      const previous = positions.get(key);
+      if (!pair?.every(validCoordinate) || previous === null ||
+          (previous && (previous[0] !== pair[0] || previous[1] !== pair[1]))) positions.set(key, null);
+      else positions.set(key, pair);
+    }
 
     const dimensions = normalizeNumericInput(rawDimensions);
     const match = roomDimensions.exec(dimensions);
@@ -311,5 +326,10 @@ export function extractBriefRooms(description) {
     if (prior?.w != null && prior.h != null && complete && (prior.w !== room.w || prior.h !== room.h)) unresolved.add(key);
     if (!prior || (prior.w === null && complete)) rooms.set(key, room);
   }
-  return [...rooms].map(([key, room]) => unresolved.has(key) ? { ...room, w: null, h: null } : room);
+  return [...rooms].map(([key, room]) => {
+    const dimensions = unresolved.has(key) ? { ...room, w: null, h: null } : room;
+    if (!positions.has(key)) return dimensions;
+    const [x, y] = positions.get(key) ?? [null, null];
+    return { ...dimensions, x, y };
+  });
 }
