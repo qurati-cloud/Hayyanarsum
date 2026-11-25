@@ -128,3 +128,38 @@ test('automatic placement with explicit dimensions starts at the lot origin when
   assert.deepEqual(plan.rooms.map(({ x, y }) => [x, y]), [[0, 0], [4, 0]]);
   assert.equal(plan.references.length, 4);
 });
+
+test('explicit setback lines extract metres in Arabic, English and French including zero', async () => {
+  const { extractBriefSetbacks } = await import('../project-brief.js');
+  const expected = { left: 0, right: 1.5, front: 3, rear: 2 };
+  for (const description of [
+    'الارتداد الأمامي: ٣ م\nالارتداد الخلفي: ۲ متر\n- الارتداد الأيسر: ٠ م\nارتداد أيمن: ١٫٥ م',
+    'Front setback: 3 m.\nBack setback: 2 meters\nLeft setback: 0 m\nRight setback: 1.5 m',
+    'Recul avant: 3 m\r\nRetrait arrière: 2 mètres\r\nRecul gauche: 0 m\r\nRecul droit: 1,5 mètre',
+  ]) {
+    assert.deepEqual(extractBriefSetbacks(description), { setbacks: expected, conflicts: [], invalid: [] });
+  }
+  assert.equal(extractBriefSetbacks('the parcel has a left setback of 3m').setbacks, null);
+});
+
+test('setbacks stay unresolved for missing, conflicting and unsupported values', async () => {
+  const { extractBriefSetbacks, customRoomBlockPlan } = await import('../project-brief.js');
+  const extracted = extractBriefSetbacks(
+    'Front setback: 3 m\nRecul avant: 4 m\nBack setback: 12 ft\nLeft setback:\nRight setback: 0 m\nRight setback: 0.0 m',
+  );
+  assert.deepEqual(extracted, { setbacks: { left: null, right: 0, front: null, rear: null },
+    conflicts: ['front'], invalid: ['rear'] });
+  for (const bad of ['-2 m', '2–3 m', '3', '3 m or 4 m', '1000001 m']) {
+    const result = extractBriefSetbacks('Front setback: 3 m\nFront setback: ' + bad);
+    assert.equal(result.setbacks.front, null);
+    assert.deepEqual(result.invalid, ['front']);
+  }
+  const brief = { frontage: 12, depth: 15 };
+  const room = { name: 'مجلس', w: 5, h: 6 };
+  assert.equal(customRoomBlockPlan(brief, { automatic: true, setbacks: extracted.setbacks }, [room]).error, 'setbacks');
+  const plan = customRoomBlockPlan(brief, {
+    automatic: true, setbacks: { ...extracted.setbacks, front: 4, rear: 2, left: 1 },
+  }, [room]);
+  assert.deepEqual(plan.envelope, { left: 1, front: 4, right: 12, rear: 13 });
+  assert.deepEqual([plan.rooms[0].x, plan.rooms[0].y], [1, 4]);
+});

@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1195,6 +1195,12 @@ const briefField = key => briefReview.elements.namedItem(key);
 let briefConflicts = [];
 const manuallyEditedBriefFields = new Set();
 let manuallyEditedBriefRooms = false;
+const manuallyEditedSetbacks = new Set();
+let manualSetbackChoice = false;
+let setbackConflicts = [];
+let invalidSetbacks = [];
+const setbackLabels = { front: 'الأمامي', rear: 'الخلفي', left: 'الأيسر', right: 'الأيمن' };
+
 let citySuggestion;
 let cityRequest;
 const aiCityButton = $('briefAiCity');
@@ -1280,7 +1286,15 @@ function loadBriefForm() {
   $('briefDescription').value = saved.description ?? '';
   for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
   $('briefUseSetbacks').checked = Boolean(saved.setbacks);
-  for (const side of setbackSides) $('briefSetback-' + side).value = saved.setbacks?.[side] ?? '';
+  manualSetbackChoice = Boolean(saved.setbacks);
+  setbackConflicts = [];
+  invalidSetbacks = [];
+  manuallyEditedSetbacks.clear();
+  for (const side of setbackSides) {
+    const value = saved.setbacks?.[side];
+    $('briefSetback-' + side).value = value ?? '';
+    if (value != null) manuallyEditedSetbacks.add(side);
+  }
   updateBriefSetbackFields();
   const rooms = saved.rooms ?? [];
   $('briefRoomList').replaceChildren();
@@ -1301,6 +1315,14 @@ $('briefExtractForm').onsubmit = event => {
   const description = $('briefDescription').value;
   const { data, conflicts } = extractBrief(description);
   const rooms = extractBriefRooms(description);
+  const { setbacks, conflicts: disputedSetbacks, invalid } = extractBriefSetbacks(description);
+  setbackConflicts = disputedSetbacks.filter(side => !manuallyEditedSetbacks.has(side));
+  invalidSetbacks = invalid.filter(side => !manuallyEditedSetbacks.has(side));
+  if (!manualSetbackChoice) $('briefUseSetbacks').checked = Boolean(setbacks);
+  for (const side of setbackSides) {
+    if (!manuallyEditedSetbacks.has(side)) $('briefSetback-' + side).value = setbacks?.[side] ?? '';
+  }
+  updateBriefSetbackFields();
   if (!manuallyEditedBriefRooms) {
     $('briefRoomList').replaceChildren();
     for (const room of rooms) addBriefRoom(room);
@@ -1317,7 +1339,8 @@ $('briefExtractForm').onsubmit = event => {
   const missing = missingBriefFields(readBriefFields()).length;
   const summary = missing ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المشروع الأولية. راجعها قبل الحفظ.';
   const incomplete = rooms.filter(room => !room.w || !room.h).length;
-  $('briefStatus').textContent = summary + (!rooms.length ? '' : manuallyEditedBriefRooms
+  const setbackSummary = setbacks && $('briefUseSetbacks').checked ? ' راجع الارتدادات في قسم المعاينة.' : '';
+  $('briefStatus').textContent = summary + setbackSummary + (!rooms.length ? '' : manuallyEditedBriefRooms
     ? ' احتُفظ بقائمة الفراغات التي عدّلتها أو حفظتها.'
     : ' أُضيفت الفراغات المذكورة إلى المعاينة.' + (incomplete ? ' راجع الأبعاد الناقصة أو المتعارضة في ' + incomplete + ' من الفراغات.' : ''));
 };
@@ -1444,9 +1467,22 @@ function readBriefSetbacks() {
   return cleanSetbacks(Object.fromEntries(setbackSides.map(side => [side, numberField('briefSetback-' + side)])));
 }
 function updateBriefSetbackFields() {
-  $('briefSetbackFields').hidden = $('briefSetbackFields').disabled = !$('briefUseSetbacks').checked;
+  const setbacks = readBriefSetbacks();
+  $('briefSetbackFields').hidden = $('briefSetbackFields').disabled = !setbacks;
+  const missing = setbacks ? ['front', 'rear', 'left', 'right'].filter(side => setbacks[side] === null) : [];
+  $('briefSetbackQuestions').replaceChildren(...missing.map(side => {
+    const item = document.createElement('li');
+    const prefix = setbackConflicts.includes(side) ? 'ذُكرت قيم متعارضة. ' :
+      invalidSetbacks.includes(side) ? 'تعذّر قراءة القيمة بالمتر. ' : '';
+    item.textContent = prefix + 'كم يبلغ الارتداد ' + setbackLabels[side] + ' بالمتر؟';
+    return item;
+  }));
 }
-$('briefUseSetbacks').onchange = () => { updateBriefSetbackFields(); clearBriefPlan(); };
+$('briefUseSetbacks').onchange = () => {
+  manualSetbackChoice = true;
+  updateBriefSetbackFields();
+  clearBriefPlan();
+};
 $('briefLayoutMode').onchange = updateBriefLayoutMode;
 $('briefPlacement').onchange = () => {
   const automatic = $('briefPlacement').value === 'automatic';
@@ -1455,6 +1491,14 @@ $('briefPlacement').onchange = () => {
 };
 $('briefLayoutForm').oninput = event => {
   if (event.target.matches('[data-room]')) manuallyEditedBriefRooms = true;
+  const side = event.target.dataset.setbackSide;
+  if (side) {
+    manuallyEditedSetbacks.add(side);
+    manualSetbackChoice = true;
+    setbackConflicts = setbackConflicts.filter(key => key !== side);
+    invalidSetbacks = invalidSetbacks.filter(key => key !== side);
+    updateBriefSetbackFields();
+  }
   clearBriefPlan();
 };
 $('briefLayoutForm').onsubmit = event => {

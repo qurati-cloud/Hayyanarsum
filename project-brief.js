@@ -83,8 +83,41 @@ export const setbackSides = ['left', 'right', 'front', 'rear'];
 export function cleanSetbacks(input) {
   if (!input || typeof input !== 'object') return null;
   return Object.fromEntries(setbackSides.map(side => [
-    side, Number.isFinite(input[side]) && input[side] >= 0 && input[side] <= 1e6 ? input[side] : null,
+    side, validSetback(input[side]) ? input[side] : null,
   ]));
+}
+
+const setbackLabels = {
+  left: /^(?:ارتداد (?:ال)?[أا]يسر|left setback|(?:retrait|recul) gauche)$/iu,
+  right: /^(?:ارتداد (?:ال)?[أا]يمن|right setback|(?:retrait|recul) droit)$/iu,
+  front: /^(?:ارتداد (?:ال)?[أا]مامي|front setback|(?:retrait|recul) avant)$/iu,
+  rear: /^(?:ارتداد (?:ال)?خلفي|(?:rear|back) setback|(?:retrait|recul) arri[eè]re)$/iu,
+};
+const validSetback = value => Number.isFinite(value) && value >= 0 && value <= 1e6;
+
+export function extractBriefSetbacks(description) {
+  const unrecognized = new Set();
+  const candidates = new Map();
+  for (const line of description.slice(0, 4000).normalize('NFKC').split(/\r?\n/u)) {
+    const match = /^\s*(?:[-•]\s*)?([^:]+):\s*(.*?)\s*$/u.exec(line);
+    if (!match) continue;
+    const label = match[1].trim().replace(/[\u064B-\u065F\u0670]/gu, '').replace(/\s+/gu, ' ').replace(/^الارتداد /u, 'ارتداد ');
+    const side = setbackSides.find(key => setbackLabels[key].test(label));
+    if (!side) continue;
+    if (!candidates.has(side)) candidates.set(side, new Set());
+    if (!match[2]) continue;
+    const metric = /^(\d+(?:[.,]\d+)?)\s*(?:م|متر|m|m[eè]tres?|meters?)\.?$/iu.exec(normalizeNumericInput(match[2]));
+    const value = metric ? Number(metric[1].replace(',', '.')) : NaN;
+    if (validSetback(value)) candidates.get(side).add(value);
+    else unrecognized.add(side);
+  }
+
+  const conflicts = [];
+  const setbacks = candidates.size ? cleanSetbacks(Object.fromEntries([...candidates].map(([side, values]) => {
+    if (values.size > 1) conflicts.push(side);
+    return [side, values.size === 1 && !unrecognized.has(side) ? [...values][0] : null];
+  }))) : null;
+  return { setbacks, conflicts, invalid: [...unrecognized] };
 }
 
 function rectangularReferences({ left, right, front, rear }, cadLayer, name) {

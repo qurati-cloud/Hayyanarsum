@@ -169,7 +169,7 @@
     <form id="briefExtractForm" class="panel">
       <h2>وصف المشروع</h2>
       <label>ما الذي تريد بناءه؟<textarea id="briefDescription" maxlength="4000" rows="6" required placeholder="فيلا في الرياض من طابقين و٤ غرف نوم. عرض الأرض ٢٠ متر، وعمق الأرض ٣٠ متر."></textarea></label>
-      <p>يمكنك كتابة كل فراغ في سطر مستقل، مثل «مجلس: ٤٫٥ × ٦ م». إذا لم تعرف الأبعاد، اكتب «مطبخ:» وأكملها بعد الاستخراج.</p>
+      <p>يمكنك كتابة كل فراغ في سطر مستقل، مثل «مجلس: ٤٫٥ × ٦ م». إذا لم تعرف الأبعاد، اكتب «مطبخ:» وأكملها بعد الاستخراج. للارتدادات، اكتب كل جهة في سطر مثل «الارتداد الأمامي: ٣ م».</p>
       <button type="submit" class="primary">استخراج البيانات المذكورة</button>
       <p class="muted">استخراج البيانات والأبعاد يعمل بقواعد محلية. يمكنك معاينة توزيع هندسي أولي من المدخلات أدناه.</p>
       <div id="briefAiControls" hidden>
@@ -221,16 +221,17 @@
           <label>إزاحة أول فراغ من جهة الشارع Y (م)<input id="briefLayoutY" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
         </div>
       </fieldset>
-      <label class="clear-room"><input id="briefUseSetbacks" type="checkbox"> حصر التوزيع ضمن ارتدادات أدخلها بنفسي</label>
+      <label class="clear-room"><input id="briefUseSetbacks" type="checkbox"> حصر التوزيع ضمن الارتدادات المدخلة</label>
       <fieldset id="briefSetbackFields" class="review-fields" hidden disabled>
         <legend>الارتدادات من حدود الأرض المستطيلة</legend>
         <p>الواجهة هي جهة الشارع عند Y = 0. حدّد الجهات كما تظهر في المعاينة. اكتب صفرًا صراحةً عند غياب ارتداد في جهة ما.</p>
         <div class="two">
-          <label>الأمامي (م)<input id="briefSetback-front" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
-          <label>الخلفي (م)<input id="briefSetback-rear" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
-          <label>الأيسر (م)<input id="briefSetback-left" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
-          <label>الأيمن (م)<input id="briefSetback-right" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الأمامي (م)<input id="briefSetback-front" data-setback-side="front" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الخلفي (م)<input id="briefSetback-rear" data-setback-side="rear" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الأيسر (م)<input id="briefSetback-left" data-setback-side="left" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الأيمن (م)<input id="briefSetback-right" data-setback-side="right" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
         </div>
+        <ul id="briefSetbackQuestions" aria-label="الارتدادات المطلوب استكمالها" aria-live="polite"></ul>
         <p>الحد المتقطع مستند إلى القيم المدخلة. ينبغي التحقق من المرجع الرسمي ومدى انطباقه على القطعة قبل اعتماد المخطط.</p>
       </fieldset>
       <button type="submit">معاينة التوزيع</button>
