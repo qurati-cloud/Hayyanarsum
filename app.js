@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, briefFields, cleanBrief, extractBrief, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, extractBrief, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1294,21 +1294,65 @@ function drawBriefPreview(plan) {
 }
 
 const briefTargetIsEmpty = () => levelShapes().length === 0 && levelMeasurements().length === 0;
+function addBriefRoom() {
+  const list = $('briefRoomList');
+  if (list.children.length >= 100) return;
+  const row = document.createElement('fieldset');
+  row.className = 'review-fields';
+  row.innerHTML = '<legend>فراغ</legend><div class="two"><label>اسم الفراغ<input data-room="name" maxlength="160" required></label>' +
+    '<label>الاستخدام<select data-room="use"><option value="">غير محدد</option></select></label></div>' +
+    '<div class="two"><label>العرض (م)<input data-room="width" data-number inputmode="decimal" data-min="0" data-step="any" required></label>' +
+    '<label>العمق (م)<input data-room="depth" data-number inputmode="decimal" data-min="0" data-step="any" required></label></div>' +
+    '<button type="button">إزالة الفراغ</button>';
+  const use = row.querySelector('select');
+  for (const [value, option] of Object.entries(residentialSpaceRules)) use.add(new Option(option.label, value));
+  row.querySelector('button').onclick = () => {
+    row.remove();
+    $('briefAddRoom').disabled = false;
+    clearBriefPlan();
+  };
+  list.append(row);
+  $('briefAddRoom').disabled = list.children.length >= 100;
+  clearBriefPlan();
+}
+
+function briefCustomRooms() {
+  return [...$('briefRoomList').children].map(row => {
+    const field = name => row.querySelector('[data-room="' + name + '"]');
+    return { name: field('name').value, roomUse: field('use').value,
+      w: numericValue(field('width')), h: numericValue(field('depth')) };
+  });
+}
+
+$('briefAddRoom').onclick = addBriefRoom;
+$('briefLayoutMode').onchange = () => {
+  const custom = $('briefLayoutMode').value === 'custom';
+  $('briefBedroomFields').hidden = $('briefBedroomFields').disabled = custom;
+  $('briefCustomFields').hidden = $('briefCustomFields').disabled = !custom;
+  if (custom && !$('briefRoomList').children.length) addBriefRoom();
+  clearBriefPlan();
+};
 $('briefLayoutForm').oninput = clearBriefPlan;
 $('briefLayoutForm').onsubmit = event => {
   event.preventDefault();
   clearBriefPlan();
-  const plan = bedroomBlockPlan(readBriefFields(), {
-    count: numberField('briefLayoutCount'), columns: numberField('briefLayoutColumns'),
-    width: numberField('briefLayoutWidth'), roomDepth: numberField('briefLayoutDepth'),
-    x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
-  });
+  const brief = readBriefFields();
+  const layout = {
+    columns: numberField('briefLayoutColumns'), x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
+  };
+  const plan = $('briefLayoutMode').value === 'custom'
+    ? customRoomBlockPlan(brief, layout, briefCustomRooms())
+    : bedroomBlockPlan(brief, {
+      ...layout, count: numberField('briefLayoutCount'),
+      width: numberField('briefLayoutWidth'), roomDepth: numberField('briefLayoutDepth'),
+    });
   const status = $('briefPlanStatus');
   if (plan.error) {
     status.textContent = {
-      brief: 'أكمل عرض الأرض وعمقها وعدد غرف النوم في بيانات المشروع.',
-      layout: 'تحقق من الأبعاد والإزاحة، وعدد غرف الطابق، وعدد الغرف في كل صف.',
-      outside: 'تتجاوز الغرف حدود الأرض. عدّل الأبعاد أو عدد الغرف في الصف أو الإزاحة.',
+      brief: 'أكمل عرض الأرض وعمقها. في وضع غرف النوم المتماثلة، أدخل أيضًا عدد غرف النوم في المشروع.',
+      'bedroom-count': 'أدخل إجمالي غرف النوم في بيانات المشروع بحيث يشمل غرف هذا الطابق.',
+      layout: 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
+      outside: 'يتجاوز التوزيع حدود الأرض. عدّل الأبعاد أو عدد الفراغات في الصف أو الإزاحة.',
     }[plan.error];
     return;
   }
@@ -1317,7 +1361,7 @@ $('briefLayoutForm').onsubmit = event => {
   const empty = briefTargetIsEmpty();
   $('insertBriefPlan').disabled = !empty;
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
-    thermalLabel(plan.rooms.length) + ' غرف. ' + (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
+    thermalLabel(plan.rooms.length) + ' فراغات. ' + (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
       'اختر طابق رسم فارغًا ثم أعد المعاينة للإضافة.');
 };
 $('insertBriefPlan').onclick = () => {

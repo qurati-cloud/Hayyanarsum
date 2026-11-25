@@ -186,17 +186,24 @@
     </form>
   </div>
   <section class="panel" aria-labelledby="briefPlanTitle">
-    <h2 id="briefPlanTitle">معاينة توزيع غرف النوم</h2>
-    <p>أدخل أبعاد الغرف وإزاحة أول غرفة من زاوية الأرض. المعاينة ترصّ المساحات المستطيلة في صفوف داخل حدود الأرض. يلزم تصميم الجدران والممرات والمداخل ومراجعة الارتدادات بصورة مستقلة.</p>
+    <h2 id="briefPlanTitle">معاينة توزيع الفراغات</h2>
+    <p>أدخل أبعاد الفراغات وإزاحة أول فراغ من زاوية الأرض. تعرض المعاينة توزيعًا مستطيلاً في صفوف. يلزم تصميم الجدران والمداخل ومراجعة الارتدادات بصورة مستقلة.</p>
     <form id="briefLayoutForm">
-      <div class="two">
+      <label>طريقة إدخال الفراغات<select id="briefLayoutMode"><option value="bedrooms">غرف نوم متماثلة</option><option value="custom">فراغات بأبعاد مختلفة</option></select></label>
+      <fieldset id="briefBedroomFields" class="review-fields">
+        <legend>أبعاد غرف النوم</legend>
         <label>غرف النوم في هذا الطابق<input id="briefLayoutCount" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1" required></label>
-        <label>عدد الغرف في الصف<input id="briefLayoutColumns" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1" required></label>
-      </div>
-      <div class="two">
-        <label>عرض الغرفة (م)<input id="briefLayoutWidth" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
-        <label>عمق الغرفة (م)<input id="briefLayoutDepth" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
-      </div>
+        <div class="two">
+          <label>عرض الغرفة (م)<input id="briefLayoutWidth" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
+          <label>عمق الغرفة (م)<input id="briefLayoutDepth" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
+        </div>
+      </fieldset>
+      <fieldset id="briefCustomFields" class="review-fields" hidden disabled>
+        <legend>الفراغات بالترتيب المطلوب</legend>
+        <div id="briefRoomList"></div>
+        <button id="briefAddRoom" type="button">إضافة فراغ</button>
+      </fieldset>
+      <label>عدد الفراغات في الصف<input id="briefLayoutColumns" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1" required></label>
       <div class="two">
         <label>إزاحة أول غرفة على X (م)<input id="briefLayoutX" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
         <label>إزاحة أول غرفة على Y (م)<input id="briefLayoutY" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
@@ -205,7 +212,7 @@
       <button id="insertBriefPlan" type="button" disabled>إضافة التوزيع إلى طابق الرسم الفارغ</button>
     </form>
     <p id="briefPlanStatus" role="status"></p>
-    <svg id="briefPlanPreview" hidden viewBox="0 0 720 420" role="img" aria-label="حد الأرض وتوزيع غرف النوم بالمقياس النسبي"></svg>
+    <svg id="briefPlanPreview" hidden viewBox="0 0 720 420" role="img" aria-label="حد الأرض وتوزيع الفراغات بالمقياس النسبي"></svg>
   </section>
 </section></main>
 <section id="printSheet"></section><footer><b>هيا نرسم · هندسة تبدأ بفكرة.</b><span>Hayyanarsum · Engineering begins with an idea.</span></footer><script type="module" src="app.js"></script></body></html>

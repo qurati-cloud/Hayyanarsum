@@ -37,3 +37,24 @@ test('bedroom preview packs supplied dimensions without exceeding the site', asy
   assert.equal(bedroomBlockPlan(brief, { ...layout, count: 5 }).error, 'layout');
   assert.equal(bedroomBlockPlan({ ...brief, depth: null }, layout).error, 'brief');
 });
+
+test('mixed-use rooms advance rows by the deepest previous room', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const rooms = [
+    { name: 'مجلس', roomUse: 'living', w: 4.5, h: 6 },
+    { name: 'مطبخ', roomUse: 'kitchen', w: 3.5, h: 3 },
+    { name: 'حمّام', roomUse: 'bathroom', w: 2, h: 2 },
+  ];
+  const brief = { frontage: 10, depth: 8 };
+  const layout = { columns: 2, x: 1, y: 0 };
+  const result = customRoomBlockPlan(brief, layout, rooms);
+  assert.deepEqual(result.rooms.map(({ x, y, w, h }) => [x, y, w, h]),
+    [[1, 0, 4.5, 6], [5.5, 0, 3.5, 3], [1, 6, 2, 2]]);
+  assert.equal(result.rooms[1].roomUse, 'kitchen');
+  assert.equal(result.rooms[1].clearRoom, false);
+  assert.equal(customRoomBlockPlan({ ...brief, depth: 7.9 }, layout, rooms).error, 'outside');
+  const withBedroom = [...rooms, { name: 'غرفة', roomUse: 'bedroom', w: 3, h: 2 }];
+  assert.equal(customRoomBlockPlan(brief, layout, withBedroom).error, 'bedroom-count');
+  assert.equal(customRoomBlockPlan({ ...brief, bedrooms: 0 }, layout, withBedroom).error, 'bedroom-count');
+  assert.equal(customRoomBlockPlan({ ...brief, bedrooms: 1 }, layout, withBedroom).rooms.length, 4);
+});
