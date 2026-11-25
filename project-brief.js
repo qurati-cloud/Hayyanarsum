@@ -41,6 +41,24 @@ export function cleanBrief(input) {
   return value;
 }
 
+const decimal = String.raw`(\d+(?:[.,]\d+)?)`;
+const metricUnit = String.raw`(?:متر|م|m(?:[eè]tres?|eters?)?)(?![\p{L}\p{M}\p{N}/^]|\s*(?:مربع(?:ة)?|مكعب(?:ة)?|carr[ée]s?|square|cub(?:ed|ic|es?))(?![\p{L}\p{M}\p{N}]))`;
+const axisDimensions = {
+  frontage: String.raw`(?:عرض (?:الأرض|الارض|الواجهة)|\bfrontage|largeur (?:du terrain|de façade))`,
+  depth: String.raw`(?:عمق (?:الأرض|الارض)|\b(?:plot )?depth|profondeur(?: du terrain)?)`,
+};
+const plotPair = new RegExp(String.raw`^\s*(?:أبعاد الأرض|ابعاد الارض|lot dimensions|plot dimensions|dimensions du terrain)\s*:\s*${decimal}\s*(?:×|x|في|by|par)\s*${decimal}\s*${metricUnit}\.?\s*$`, 'gmu');
+
+const countTerms = {
+  storeys: /(?:طوابق|طابق|أدوار|ادوار|دور|storeys?|stories|floors?|étages?)/u,
+  bedrooms: /(?:غرف(?:ة)? نوم|bedrooms?|chambres?)/u,
+};
+const countLabels = {
+  storeys: /(?:عدد (?:الطوابق|الأدوار|الادوار)|(?:storey|floor) count|nombre d['’]étages)/u,
+  bedrooms: /(?:عدد غرف النوم|bedroom count|nombre de chambres)/u,
+};
+const countValue = raw => Object.hasOwn(words, raw) ? words[raw] : /^\d+$/u.test(raw) ? Number(raw) : NaN;
+
 export function extractBrief(description) {
   const source = normalizeNumericInput(description.slice(0, 4000).normalize('NFKC').toLowerCase()).replace(/[\u064B-\u065F\u0670]/gu, '');
   const candidates = Object.fromEntries(Object.keys(briefFields).map(key => [key, new Set()]));
@@ -50,18 +68,23 @@ export function extractBrief(description) {
   };
   for (const [kind, pattern] of Object.entries(buildingPatterns)) if (pattern.test(source)) add('kind', kind);
   for (const [city, pattern] of Object.entries(cityNames)) if (pattern.test(source)) add('city', city);
-  for (const match of source.matchAll(/(?:عرض (?:الأرض|الارض|الواجهة)|frontage|largeur (?:du terrain|de façade))\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:متر|م(?=$|\s|[،,.؛])|m(?:ètres?|eters?)?\b)/giu)) {
+  for (const [key, label] of Object.entries(axisDimensions)) {
+    const explicit = new RegExp(String.raw`${label}\s*[:=]?\s*${decimal}\s*${metricUnit}`, 'gu');
+    for (const match of source.matchAll(explicit)) add(key, Number(match[1].replace(',', '.')));
+  }
+  for (const match of source.matchAll(plotPair)) {
     add('frontage', Number(match[1].replace(',', '.')));
+    add('depth', Number(match[2].replace(',', '.')));
   }
-  for (const match of source.matchAll(/(?:عمق (?:الأرض|الارض)|(?:plot )?depth|profondeur(?: du terrain)?)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:متر|م(?=$|\s|[،,.؛])|m(?:ètres?|eters?)?\b)/giu)) {
-    add('depth', Number(match[1].replace(',', '.')));
-  }
-  const count = raw => Object.hasOwn(words, raw) ? words[raw] : Number(raw);
-  for (const match of source.matchAll(/(?:^|[^\p{L}\p{N}.,+−-])([\p{L}]+|\d+)\s*(?:طوابق|طابق|أدوار|ادوار|دور|storeys?|stories|floors?|étages?)(?![\p{L}])/giu)) {
-    add('storeys', count(match[1]));
-  }
-  for (const match of source.matchAll(/(?:^|[^\p{L}\p{N}.,+−-])([\p{L}]+|\d+)\s*(?:غرف(?:ة)? نوم|bedrooms?|chambres?)(?![\p{L}])/giu)) {
-    add('bedrooms', count(match[1].replace(/^ب(?=أربع|اربع|ثلاث|خمس)/u, '')));
+  for (const [key, term] of Object.entries(countTerms)) {
+    const inline = new RegExp(String.raw`(?<![\p{L}\p{M}\p{N}.,+−-])(?:(?:وب?|ب)(?=\d|أربع|اربع|ثلاث|خمس))?(\d+|[\p{L}]+)[ \t]*${term.source}(?![\p{L}\p{M}\p{N}]|[ \t]+count\b)`, 'gu');
+    for (const match of source.matchAll(inline)) {
+      const prefix = source.slice(Math.max(0, match.index - 30), match.index);
+      if (/\d[ \t]*(?:[-–—]|to|or|à|ou|إلى|أو)[ \t]*$/u.test(prefix)) continue;
+      add(key, countValue(match[1]));
+    }
+    const labeled = new RegExp(String.raw`^\s*${countLabels[key].source}\s*:\s*(\d+|[\p{L}]+)\.?\s*$`, 'gmu');
+    for (const match of source.matchAll(labeled)) add(key, countValue(match[1]));
   }
   if (/(?:^|[^\p{L}])(?:طابقان|طابقين|دوران|دورين)(?![\p{L}])/u.test(source)) add('storeys', 2);
   if (/(?:^|[^\p{L}])(?:غرفتا نوم|غرفتي نوم)(?![\p{L}])/u.test(source)) add('bedrooms', 2);

@@ -163,3 +163,25 @@ test('setbacks stay unresolved for missing, conflicting and unsupported values',
   assert.deepEqual(plan.envelope, { left: 1, front: 4, right: 12, rear: 13 });
   assert.deepEqual([plan.rooms[0].x, plan.rooms[0].y], [1, 4]);
 });
+
+test('whole-line lot dimensions and explicit counts work in Arabic, English and French', () => {
+  const expected = { frontage: 20.5, depth: 30, storeys: 2, bedrooms: 4 };
+  assert.deepEqual(extractBrief('أبعاد الأرض: ٢٠٫٥ × ٣٠ متر\nعدد الطوابق: ٢\nعدد غرف النوم: ٤').data, expected);
+  assert.deepEqual(extractBrief('Plot dimensions: 20.5 by 30 meters.\nFloor count: 2\nBedroom count: four').data, expected);
+  assert.deepEqual(extractBrief('Dimensions du terrain : 20,5 par 30 mètres\r\nNombre d’étages : deux\r\nNombre de chambres : 4').data, expected);
+  assert.deepEqual(extractBrief('فيلا في الرياض من طابقين و٤ غرف نوم.').data,
+    { kind: 'villa', city: 'الرياض', storeys: 2, bedrooms: 4 });
+  assert.deepEqual(extractBrief('فيلا في الرياض ب٢ طوابق وبأربع غرف نوم.').data,
+    { kind: 'villa', city: 'الرياض', storeys: 2, bedrooms: 4 });
+});
+
+test('paired and standalone dimensions share conflict detection and require linear units', () => {
+  const result = extractBrief('أبعاد الأرض: ٢٠ × ٣٠ م\nعرض الأرض: ٢٥ م\nعدد غرف النوم: ٢\nبيت بأربع غرف نوم.');
+  assert.deepEqual(result, { data: { kind: 'house', depth: 30 }, conflicts: ['frontage', 'bedrooms'] });
+  for (const description of [
+    'أبعاد الأرض: ٢٠ × ٣٠ م²', 'أبعاد الأرض: ٢٠ × ٣٠ م مربع', 'عرض الأرض: 20 متر مربع',
+    'Plot dimensions: 20 × 30 ft', 'Frontage: 20 m²', 'Depth: 30 m^3',
+    'Dimensions du terrain : 20 × 30 mètres carrés', 'أبعاد الأرض: ٢٠ × ٣٠ بدون وحدة',
+    '3.5 bedrooms', '2 - 3 storeys', '3 to 4 bedrooms', '2 à 4 chambres',
+  ]) assert.deepEqual(extractBrief(description).data, {}, description);
+});
