@@ -185,3 +185,32 @@ test('paired and standalone dimensions share conflict detection and require line
     '3.5 bedrooms', '2 - 3 storeys', '3 to 4 bedrooms', '2 à 4 chambres',
   ]) assert.deepEqual(extractBrief(description).data, {}, description);
 });
+
+test('explicit custom room prefixes keep names and dimensions without inferring a use', async () => {
+  const { extractBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const rooms = extractBriefRooms(
+    'أبعاد الأرض: ١٠ × ١٢ م\nفراغ مخزن الحديقة: ٢٫٥ × ٣ م\nSpace Laundry: 2 by 2 meters\nEspace Atelier : 3 par 4 mètres\nالمقاول: أحمد',
+  );
+  assert.deepEqual(rooms, [
+    { name: 'مخزن الحديقة', roomUse: '', w: 2.5, h: 3 },
+    { name: 'Laundry', roomUse: '', w: 2, h: 2 },
+    { name: 'Atelier', roomUse: '', w: 3, h: 4 },
+  ]);
+  const plan = customRoomBlockPlan({ frontage: 10, depth: 12 }, { automatic: true }, rooms);
+  assert.deepEqual(plan.rooms.map(({ name, x, y, w, h }) => [name, x, y, w, h]),
+    [['مخزن الحديقة', 0, 0, 2.5, 3], ['Laundry', 2.5, 0, 2, 2], ['Atelier', 4.5, 0, 3, 4]]);
+});
+
+test('a named room is kept for review when its dimensions are missing, inconsistent, or use an unsupported unit', async () => {
+  const { extractBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const rooms = extractBriefRooms(
+    'فراغ مخزن:\nSpace Laundry: 2 × 3 m\nSpace Laundry: 2 × 4 m\nEspace Atelier: 3 × 4 m²\nEspace Atelier: 3 × 4 m\nSpace Bedroom 1: 4 × 5 m',
+  );
+  assert.deepEqual(rooms, [
+    { name: 'مخزن', roomUse: '', w: null, h: null },
+    { name: 'Laundry', roomUse: '', w: null, h: null },
+    { name: 'Atelier', roomUse: '', w: null, h: null },
+    { name: 'Bedroom 1', roomUse: 'bedroom', w: 4, h: 5 },
+  ]);
+  assert.equal(customRoomBlockPlan({ frontage: 10, depth: 12, bedrooms: 1 }, { automatic: true }, rooms).error, 'layout');
+});

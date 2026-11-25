@@ -1381,6 +1381,8 @@ function clearBriefPlan() {
   $('insertBriefPlan').disabled = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
+  $('briefPlanRooms').hidden = true;
+  $('briefPlanRooms').replaceChildren();
   $('briefPlanStatus').textContent = '';
 }
 
@@ -1416,9 +1418,33 @@ function drawBriefPreview(plan) {
     ? 'حد الأرض والحد المرجعي المتقطع وتوزيع الفراغات بالمقياس النسبي'
     : 'حد الأرض وتوزيع الفراغات بالمقياس النسبي');
   canvas.hidden = false;
+  const legend = $('briefPlanRooms');
+  legend.replaceChildren(...plan.rooms.map((room, index) => {
+    const item = document.createElement('li');
+    item.textContent = thermalLabel(index + 1) + ' · ' + room.name + ' · ' +
+      thermalLabel(room.w) + ' × ' + thermalLabel(room.h) + ' م';
+    return item;
+  }));
+  legend.hidden = false;
 }
 
 const briefTargetIsEmpty = () => levelShapes().length === 0 && levelMeasurements().length === 0;
+function updateBriefRoomFeedback(row) {
+  const name = row.querySelector('[data-room="name"]').value.trim();
+  const dimensions = [
+    ['width', 'العرض'],
+    ['depth', 'العمق'],
+  ];
+  const missing = dimensions.filter(([key]) => {
+    const value = numericValue(row.querySelector('[data-room="' + key + '"]'));
+    return !Number.isFinite(value) || value <= 0;
+  }).map(([, label]) => label);
+  row.querySelector('legend').textContent = name || 'فراغ جديد';
+  const feedback = row.querySelector('[data-room-feedback]');
+  feedback.hidden = missing.length === 0;
+  feedback.textContent = missing.length ? 'أدخل ' + missing.join(' و') + ' بالمتر قبل المعاينة.' : '';
+}
+
 function addBriefRoom(room = {}) {
   const list = $('briefRoomList');
   if (list.children.length >= 100) return;
@@ -1426,15 +1452,16 @@ function addBriefRoom(room = {}) {
   row.className = 'review-fields';
   row.innerHTML = '<legend>فراغ</legend><div class="two"><label>اسم الفراغ<input data-room="name" maxlength="160" required></label>' +
     '<label>الاستخدام<select data-room="use"><option value="">غير محدد</option></select></label></div>' +
-    '<div class="two"><label>العرض (م)<input data-room="width" data-number inputmode="decimal" data-min="0" data-step="any" required></label>' +
-    '<label>العمق (م)<input data-room="depth" data-number inputmode="decimal" data-min="0" data-step="any" required></label></div>' +
-    '<button type="button">إزالة الفراغ</button>';
+    '<div class="two"><label>العرض (م)<input data-room="width" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>' +
+    '<label>العمق (م)<input data-room="depth" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label></div>' +
+    '<p data-room-feedback class="muted" hidden></p><button type="button">إزالة الفراغ</button>';
   const use = row.querySelector('select');
   for (const [value, option] of Object.entries(residentialSpaceRules)) use.add(new Option(option.label, value));
   row.querySelector('[data-room="name"]').value = room.name ?? '';
   use.value = room.roomUse ?? '';
   row.querySelector('[data-room="width"]').value = room.w ?? '';
   row.querySelector('[data-room="depth"]').value = room.h ?? '';
+  updateBriefRoomFeedback(row);
   row.querySelector('button').onclick = () => {
     row.remove();
     manuallyEditedBriefRooms = true;
@@ -1490,7 +1517,10 @@ $('briefPlacement').onchange = () => {
   clearBriefPlan();
 };
 $('briefLayoutForm').oninput = event => {
-  if (event.target.matches('[data-room]')) manuallyEditedBriefRooms = true;
+  if (event.target.matches('[data-room]')) {
+    manuallyEditedBriefRooms = true;
+    updateBriefRoomFeedback(event.target.closest('fieldset'));
+  }
   const side = event.target.dataset.setbackSide;
   if (side) {
     manuallyEditedSetbacks.add(side);

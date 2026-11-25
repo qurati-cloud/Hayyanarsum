@@ -249,23 +249,34 @@ export function cleanBriefRooms(rooms) {
   });
 }
 
+const customRoomPrefix = /^(?:فراغ|space|espace)\s+/iu;
+const roomDimensions = new RegExp('^' + decimal + String.raw`\s*(?:×|x|في|par|by)\s*` +
+  decimal + String.raw`\s*` + metricUnit + '\\.?$', 'iu');
+
 export function extractBriefRooms(description) {
   const rooms = new Map();
-  const conflicts = new Set();
-  for (const line of description.slice(0, 4000).split(/\r?\n/u)) {
-    const [rawName, rawDimensions, ...extra] = line.split(/[:：]/u);
+  const unresolved = new Set();
+  for (const line of description.slice(0, 4000).normalize('NFKC').split(/\r?\n/u)) {
+    const [rawName, rawDimensions, ...extra] = line.split(':');
     if (rawDimensions === undefined || extra.length) continue;
-    const name = normalizeNumericInput(rawName.trim().replace(/^[-•]\s*/u, ''));
-    const key = name.toLowerCase().replace(/[\u064B-\u065F\u0670]/gu, '');
+    const label = normalizeNumericInput(rawName.replace(/^\s*[-•]\s*/u, ''));
+    const custom = customRoomPrefix.test(label);
+    const name = label.replace(customRoomPrefix, '').trim();
+    if (!name || name.length > 160) continue;
+    const key = name.toLowerCase().replace(/[\u064B-\u065F\u0670]/gu, '').replace(/\s+/gu, ' ');
     const kind = key.replace(/\s+\d+$/u, '').trim();
     const use = Object.keys(roomLabels).find(type => roomLabels[type].test(kind));
-    if (!use || (!rooms.has(key) && rooms.size >= 100)) continue;
-    const match = /^([0-9]+(?:[.,][0-9]+)?)\s*(?:×|x|في|par|by)\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:م|متر|m|mètres?|meters?)$/iu.exec(normalizeNumericInput(rawDimensions));
+    if ((!use && !custom) || (!rooms.has(key) && rooms.size >= 100)) continue;
+
+    const dimensions = normalizeNumericInput(rawDimensions);
+    const match = roomDimensions.exec(dimensions);
     const [room] = cleanBriefRooms([{ name, roomUse: use,
       w: match ? Number(match[1].replace(',', '.')) : null, h: match ? Number(match[2].replace(',', '.')) : null }]);
+    const complete = room.w !== null && room.h !== null;
     const prior = rooms.get(key);
-    if (!prior || (!prior.w && room.w)) rooms.set(key, room);
-    else if (prior.w && room.w && (prior.w !== room.w || prior.h !== room.h)) conflicts.add(key);
+    if (!complete && dimensions) unresolved.add(key);
+    if (prior?.w != null && prior.h != null && complete && (prior.w !== room.w || prior.h !== room.h)) unresolved.add(key);
+    if (!prior || (prior.w === null && complete)) rooms.set(key, room);
   }
-  return [...rooms].map(([key, room]) => conflicts.has(key) ? { ...room, w: null, h: null } : room);
+  return [...rooms].map(([key, room]) => unresolved.has(key) ? { ...room, w: null, h: null } : room);
 }

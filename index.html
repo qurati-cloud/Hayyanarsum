@@ -170,7 +170,7 @@
       <h2>وصف المشروع</h2>
       <label>ما الذي تريد بناءه؟<textarea id="briefDescription" maxlength="4000" rows="6" required placeholder="فيلا في الرياض من طابقين و٤ غرف نوم. عرض الأرض ٢٠ متر، وعمق الأرض ٣٠ متر."></textarea></label>
       <p>يمكنك ذكر أبعاد الأرض في سطر مثل «أبعاد الأرض: ٢٠ × ٣٠ م» بالترتيب: عرض الواجهة ثم العمق.</p>
-      <p>يمكنك كتابة كل فراغ في سطر مستقل، مثل «مجلس: ٤٫٥ × ٦ م». إذا لم تعرف الأبعاد، اكتب «مطبخ:» وأكملها بعد الاستخراج. للارتدادات، اكتب كل جهة في سطر مثل «الارتداد الأمامي: ٣ م».</p>
+      <p>يمكنك كتابة كل فراغ في سطر مستقل، مثل «مجلس: ٤٫٥ × ٦ م». للاسم المخصص اكتب «فراغ مخزن الحديقة: ٢ × ٣ م». إذا لم تعرف الأبعاد، اترك ما بعد النقطتين فارغًا وأكمل الحقول بعد الاستخراج. للارتدادات، اكتب كل جهة في سطر مثل «الارتداد الأمامي: ٣ م».</p>
       <button type="submit" class="primary">استخراج البيانات المذكورة</button>
       <p class="muted">استخراج البيانات والأبعاد يعمل بقواعد محلية. يمكنك معاينة توزيع هندسي أولي من المدخلات أدناه.</p>
       <div id="briefAiControls" hidden>
@@ -240,6 +240,7 @@
     </form>
     <p id="briefPlanStatus" role="status"></p>
     <svg id="briefPlanPreview" hidden viewBox="0 0 720 420" role="img" aria-label="حد الأرض وتوزيع الفراغات بالمقياس النسبي"></svg>
+    <ul id="briefPlanRooms" aria-label="أسماء الفراغات المرقمة وأبعادها" hidden></ul>
   </section>
 </section></main>
 <section id="printSheet"></section><footer><b>هيا نرسم · هندسة تبدأ بفكرة.</b><span>Hayyanarsum · Engineering begins with an idea.</span></footer><script type="module" src="app.js"></script></body></html>
