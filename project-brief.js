@@ -78,12 +78,40 @@ export function missingBriefFields(data) {
   return Object.keys(briefFields).filter(key => !Object.hasOwn(data, key));
 }
 
-function placeRoomBlocks(brief, { columns, x, y }, blocks) {
+export const setbackSides = ['left', 'right', 'front', 'rear'];
+
+export function cleanSetbacks(input) {
+  if (!input || typeof input !== 'object') return null;
+  return Object.fromEntries(setbackSides.map(side => [
+    side, Number.isFinite(input[side]) && input[side] >= 0 && input[side] <= 1e6 ? input[side] : null,
+  ]));
+}
+
+function rectangularReferences({ left, right, front, rear }, cadLayer, name) {
+  const corners = [[left, front], [right, front], [right, rear], [left, rear]];
+  return corners.map(([x, y], index) => {
+    const [x2, y2] = corners[(index + 1) % 4];
+    return { type: 'cadLine', layer: 'CAD-REF', cadLayer, name: name + ' ' + (index + 1), x, y, x2, y2 };
+  });
+}
+
+function placeRoomBlocks(brief, { columns, x, y, setbacks }, blocks) {
   const { frontage, depth } = cleanBrief(brief);
   if (!frontage || !depth) return { error: 'brief' };
   if (!blocks.length || blocks.length > 100 || !Number.isInteger(columns) || columns < 1 || columns > blocks.length ||
       ![x, y].every(value => Number.isFinite(value) && value >= 0)) return { error: 'layout' };
   const fits = (used, available) => used <= available + Math.abs(available) * Number.EPSILON * 4;
+  const lot = { left: 0, front: 0, right: frontage, rear: depth };
+  let envelope = null;
+  if (setbacks != null) {
+    const offsets = cleanSetbacks(setbacks);
+    if (!offsets || setbackSides.some(side => offsets[side] === null)) return { error: 'setbacks' };
+    envelope = { left: offsets.left, front: offsets.front, right: frontage - offsets.right, rear: depth - offsets.rear };
+    if (fits(envelope.right, envelope.left) || fits(envelope.rear, envelope.front)) return { error: 'setback-size' };
+  }
+  const bounds = envelope ?? lot;
+  const outside = envelope ? 'outside-setbacks' : 'outside';
+  if (!fits(bounds.left, x) || !fits(bounds.front, y)) return { error: outside };
   const rooms = [];
   let top = y;
   for (let start = 0; start < blocks.length; start += columns) {
@@ -93,7 +121,7 @@ function placeRoomBlocks(brief, { columns, x, y }, blocks) {
       const { name, w, h, roomUse } = block;
       if (typeof name !== 'string' || !name.trim() ||
           ![w, h].every(value => Number.isFinite(value) && value > 0)) return { error: 'layout' };
-      if (!fits(left + w, frontage) || !fits(top + h, depth)) return { error: 'outside' };
+      if (!fits(left + w, bounds.right) || !fits(top + h, bounds.rear)) return { error: outside };
       rooms.push({ type: 'room', layer: 'A-WALL', name: name.trim().slice(0, 160),
         ...residentialRoomMetadata(roomUse, false), x: left, y: top, w, h, z: null });
       left += w;
@@ -101,12 +129,9 @@ function placeRoomBlocks(brief, { columns, x, y }, blocks) {
     }
     top += rowHeight;
   }
-  const corners = [[0, 0], [frontage, 0], [frontage, depth], [0, depth]];
-  const references = corners.map(([x1, y1], index) => {
-    const [x2, y2] = corners[(index + 1) % 4];
-    return { type: 'cadLine', layer: 'CAD-REF', cadLayer: 'SITE-LOT', name: 'حد الأرض ' + (index + 1), x: x1, y: y1, x2, y2 };
-  });
-  return { frontage, depth, references, rooms };
+  const references = rectangularReferences(lot, 'SITE-LOT', 'حد الأرض');
+  if (envelope) references.push(...rectangularReferences(envelope, 'SITE-LIMIT', 'حد مرجعي للتوزيع'));
+  return { frontage, depth, envelope, references, rooms };
 }
 
 export function bedroomBlockPlan(brief, layout) {

@@ -188,7 +188,7 @@
   </div>
   <section class="panel" aria-labelledby="briefPlanTitle">
     <h2 id="briefPlanTitle">معاينة توزيع الفراغات</h2>
-    <p>أدخل أبعاد الفراغات وإزاحة أول فراغ من زاوية الأرض. تعرض المعاينة توزيعًا مستطيلاً في صفوف. يلزم تصميم الجدران والمداخل ومراجعة الارتدادات بصورة مستقلة.</p>
+    <p>أدخل أبعاد الفراغات وإزاحة أول فراغ من زاوية الأرض. تعرض المعاينة توزيعًا مستطيلاً في صفوف. يلزم تصميم الجدران والمداخل ومراجعة اشتراطات القطعة بصورة مستقلة.</p>
     <form id="briefLayoutForm">
       <label>طريقة إدخال الفراغات<select id="briefLayoutMode"><option value="bedrooms">غرف نوم متماثلة</option><option value="custom">فراغات بأبعاد مختلفة</option></select></label>
       <fieldset id="briefBedroomFields" class="review-fields">
@@ -206,9 +206,21 @@
       </fieldset>
       <label>عدد الفراغات في الصف<input id="briefLayoutColumns" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1" required></label>
       <div class="two">
-        <label>إزاحة أول غرفة على X (م)<input id="briefLayoutX" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
-        <label>إزاحة أول غرفة على Y (م)<input id="briefLayoutY" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
+        <label>إزاحة أول فراغ من اليسار X (م)<input id="briefLayoutX" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
+        <label>إزاحة أول فراغ من جهة الشارع Y (م)<input id="briefLayoutY" data-number inputmode="decimal" data-min="0" data-step="any" required></label>
       </div>
+      <label class="clear-room"><input id="briefUseSetbacks" type="checkbox"> حصر التوزيع ضمن ارتدادات أدخلها بنفسي</label>
+      <fieldset id="briefSetbackFields" class="review-fields" hidden disabled>
+        <legend>الارتدادات من حدود الأرض المستطيلة</legend>
+        <p>الواجهة هي جهة الشارع عند Y = 0. حدّد الجهات كما تظهر في المعاينة. اكتب صفرًا صراحةً عند غياب ارتداد في جهة ما.</p>
+        <div class="two">
+          <label>الأمامي (م)<input id="briefSetback-front" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الخلفي (م)<input id="briefSetback-rear" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الأيسر (م)<input id="briefSetback-left" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+          <label>الأيمن (م)<input id="briefSetback-right" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>
+        </div>
+        <p>الحد المتقطع مستند إلى القيم المدخلة. ينبغي التحقق من المرجع الرسمي ومدى انطباقه على القطعة قبل اعتماد المخطط.</p>
+      </fieldset>
       <button type="submit">معاينة التوزيع</button>
       <button id="insertBriefPlan" type="button" disabled>إضافة التوزيع إلى طابق الرسم الفارغ</button>
     </form>

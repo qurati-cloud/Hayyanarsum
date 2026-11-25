@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, cleanBriefRooms, extractBrief, extractBriefRooms, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1213,6 +1213,9 @@ function loadBriefForm() {
   const saved = S.project.brief ?? {};
   $('briefDescription').value = saved.description ?? '';
   for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
+  $('briefUseSetbacks').checked = Boolean(saved.setbacks);
+  for (const side of setbackSides) $('briefSetback-' + side).value = saved.setbacks?.[side] ?? '';
+  updateBriefSetbackFields();
   const rooms = saved.rooms ?? [];
   $('briefRoomList').replaceChildren();
   for (const room of rooms) addBriefRoom(room);
@@ -1270,7 +1273,8 @@ briefReview.onsubmit = event => {
     }
   }
   commit();
-  S.project.brief = { description: $('briefDescription').value.trim(), fields, rooms: cleanBriefRooms(briefCustomRooms()) };
+  S.project.brief = { description: $('briefDescription').value.trim(), fields,
+    rooms: cleanBriefRooms(briefCustomRooms()), setbacks: readBriefSetbacks() };
   try {
     localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
     $('briefStatus').textContent = 'حُفظت المسودة في المشروع على هذا الجهاز.';
@@ -1310,6 +1314,15 @@ function drawBriefPreview(plan) {
     label.textContent = thermalLabel(index + 1);
     canvas.append(label);
   }
+  if (plan.envelope) {
+    const { left, front, right, rear } = plan.envelope;
+    canvas.append(el('rect', { x: x + left * scale, y: y + front * scale,
+      width: (right - left) * scale, height: (rear - front) * scale,
+      fill: 'none', stroke: '#956a28', 'stroke-width': 2, 'stroke-dasharray': '6 4' }));
+  }
+  canvas.setAttribute('aria-label', plan.envelope
+    ? 'حد الأرض والحد المرجعي المتقطع وتوزيع الفراغات بالمقياس النسبي'
+    : 'حد الأرض وتوزيع الفراغات بالمقياس النسبي');
   canvas.hidden = false;
 }
 
@@ -1357,6 +1370,14 @@ function updateBriefLayoutMode() {
   if (custom && !$('briefRoomList').children.length) addBriefRoom();
   clearBriefPlan();
 }
+function readBriefSetbacks() {
+  if (!$('briefUseSetbacks').checked) return null;
+  return cleanSetbacks(Object.fromEntries(setbackSides.map(side => [side, numberField('briefSetback-' + side)])));
+}
+function updateBriefSetbackFields() {
+  $('briefSetbackFields').hidden = $('briefSetbackFields').disabled = !$('briefUseSetbacks').checked;
+}
+$('briefUseSetbacks').onchange = () => { updateBriefSetbackFields(); clearBriefPlan(); };
 $('briefLayoutMode').onchange = updateBriefLayoutMode;
 $('briefLayoutForm').oninput = event => {
   if (event.target.matches('[data-room]')) manuallyEditedBriefRooms = true;
@@ -1368,6 +1389,7 @@ $('briefLayoutForm').onsubmit = event => {
   const brief = readBriefFields();
   const layout = {
     columns: numberField('briefLayoutColumns'), x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
+    setbacks: readBriefSetbacks(),
   };
   const plan = $('briefLayoutMode').value === 'custom'
     ? customRoomBlockPlan(brief, layout, briefCustomRooms())
@@ -1381,6 +1403,9 @@ $('briefLayoutForm').onsubmit = event => {
       brief: 'أكمل عرض الأرض وعمقها. في وضع غرف النوم المتماثلة، أدخل أيضًا عدد غرف النوم في المشروع.',
       'bedroom-count': 'أدخل إجمالي غرف النوم في بيانات المشروع بحيث يشمل غرف هذا الطابق.',
       layout: 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
+      setbacks: 'أدخل قيمة صالحة لكل جهة من جهات الارتداد الأربع.',
+      'setback-size': 'الارتدادات المدخلة لا تترك مساحة للتوزيع. راجع أبعاد الأرض والقيم المدخلة.',
+      'outside-setbacks': 'يتجاوز التوزيع الحدود المرجعية. عدّل أبعاد الفراغات أو عددها في الصف أو إزاحة أول فراغ.',
       outside: 'يتجاوز التوزيع حدود الأرض. عدّل الأبعاد أو عدد الفراغات في الصف أو الإزاحة.',
     }[plan.error];
     return;
@@ -1390,7 +1415,10 @@ $('briefLayoutForm').onsubmit = event => {
   const empty = briefTargetIsEmpty();
   $('insertBriefPlan').disabled = !empty;
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
-    thermalLabel(plan.rooms.length) + ' فراغات. ' + (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
+    thermalLabel(plan.rooms.length) + ' فراغات. ' +
+    (plan.envelope ? 'المساحة داخل الحدود المرجعية ' +
+      thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
+    (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
       'اختر طابق رسم فارغًا ثم أعد المعاينة للإضافة.');
 };
 $('insertBriefPlan').onclick = () => {
@@ -1452,6 +1480,7 @@ function readProject(data) {
       description: typeof brief.description === 'string' ? brief.description.slice(0, 4000) : '',
       fields: cleanBrief(brief.fields),
       rooms: cleanBriefRooms(brief.rooms),
+      setbacks: cleanSetbacks(brief.setbacks),
     };
   }
   project.transmission = cleanTransmissionScenario(data.project?.transmission);

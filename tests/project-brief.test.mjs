@@ -71,3 +71,33 @@ test('explicit room lines populate types and metric dimensions while leaving mis
     { name: 'Corridor', roomUse: 'corridor', w: null, h: null },
   ]);
 });
+
+test('user-entered setbacks bound the room arrangement and create a separate DXF reference layer', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const { dxf } = await import('../engine.js');
+  const brief = { frontage: 10, depth: 14 };
+  const layout = { columns: 1, x: 2, y: 3, setbacks: { left: 2, right: 1, front: 3, rear: 2 } };
+  const rooms = [{ name: 'مجلس', roomUse: 'living', w: 7, h: 9 }];
+  const plan = customRoomBlockPlan(brief, layout, rooms);
+  assert.deepEqual(plan.envelope, { left: 2, front: 3, right: 9, rear: 12 });
+  const limits = plan.references.filter(line => line.cadLayer === 'SITE-LIMIT');
+  assert.deepEqual(limits.map(({ x, y, x2, y2 }) => [x, y, x2, y2]),
+    [[2, 3, 9, 3], [9, 3, 9, 12], [9, 12, 2, 12], [2, 12, 2, 3]]);
+  assert.match(dxf(plan.references), /SITE-LIMIT/);
+  for (const [x, y] of [[1.9, 3], [2, 2.9], [2.1, 3], [2, 3.1]]) {
+    assert.equal(customRoomBlockPlan(brief, { ...layout, x, y }, rooms).error, 'outside-setbacks');
+  }
+});
+
+test('setbacks require all four distances and accept explicit zero', async () => {
+  const { bedroomBlockPlan, cleanSetbacks } = await import('../project-brief.js');
+  const brief = { frontage: 10, depth: 14, bedrooms: 1 };
+  const layout = { columns: 1, x: 0, y: 0, count: 1, width: 10, roomDepth: 14 };
+  const zeros = { left: 0, right: 0, front: 0, rear: 0 };
+  assert.deepEqual(cleanSetbacks({ ...zeros, front: '' }), { ...zeros, front: null });
+  assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: zeros }).rooms.length, 1);
+  assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: { ...zeros, left: -1 } }).error, 'setbacks');
+  assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: { ...zeros, front: undefined } }).error, 'setbacks');
+  assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: { ...zeros, left: 5, right: 5 } }).error, 'setback-size');
+  assert.equal(bedroomBlockPlan(brief, { ...layout, setbacks: { ...zeros, rear: 20 } }).error, 'setback-size');
+});
