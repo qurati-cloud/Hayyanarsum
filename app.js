@@ -6,12 +6,12 @@ import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalK
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
-import{snap,nearestCadEndpoint,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 let fitDrawing = false;
 let snapCadEndpoints = false;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[];clearCoordination()};
 function dimension(s){const g=$('dims'),t=el('text',{x:(!isLinear(s)?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(!isLinear(s)?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(!isLinear(s)?s.w:length(s)).toFixed(2)+' m';g.append(t)}
-function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=!isLinear(s)?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':s.type==='cadLine'?2:6,'vector-effect':s.type==='cadLine'?'non-scaling-stroke':'none',class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(isLinear(s)?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && !isLinear(shape)); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels(); renderSlabEditor();renderThermalAssignment(); renderEnvelope(); updateDrawingExtent()}
+function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=!isLinear(s)?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':s.type==='cadLine'?2:6,'vector-effect':s.type==='cadLine'?'non-scaling-stroke':'none',class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(isLinear(s)?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && !isLinear(shape)); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels(); renderSlabEditor();renderThermalAssignment(); renderEnvelope(); updateDrawingExtent(); renderMeasurements()}
 const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);
 const itemLabel = shape => S.levels.length === 1 ? shape.name : shape.name + ' · ' + elementLevel(shape, S.levels)?.name;
 const quantityFor = shape => isLinear(shape) ? length(shape) : shape.type === 'slab' ? slabNetArea(shape) : area(shape);
@@ -56,7 +56,8 @@ $('svg').onpointercancel = () => {
 };
 function updateDrawingExtent() {
   let view = [0, 0, 1200, 700];
-  const shapes = fitDrawing ? levelShapes() : [];
+  const shapes = fitDrawing ? [...levelShapes(), ...S.measurements.filter(item => item.levelId === S.activeLevel)
+    .map(item => ({ ...item, type: 'cadLine' }))] : [];
   if (shapes.length) {
     const points = shapes.flatMap(shape => isLinear(shape)
       ? [[shape.x, shape.y], [shape.x2, shape.y2]]
@@ -77,7 +78,7 @@ function updateDrawingExtent() {
   $('fitDrawing').classList.toggle('active', fitDrawing);
 }
 $('fitDrawing').onclick = () => { fitDrawing = !fitDrawing; updateDrawingExtent(); };
-$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else{if(S.tool==='room')$('roomClear').checked=false;start=pt(e)}};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(['room','slab'].includes(S.tool)?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(['room','slab'].includes(S.tool)&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure')$('mode').textContent='القياس: '+Math.hypot(p.x-a.x,p.y-a.y).toFixed(2)+' م'};
+$('svg').onpointerdown=e=>{if(S.tool==='select'){selectShape(e.target.dataset.id || null)}else{if(S.tool==='room')$('roomClear').checked=false;start=pt(e)}};$('svg').onpointermove=e=>{const p=pt(e);$('cursor').textContent=`X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`;if(!start)return;const q=$('preview');q.replaceChildren();q.append(['room','slab'].includes(S.tool)?el('rect',{x:Math.min(start.x,p.x)*PX,y:Math.min(start.y,p.y)*PX,width:Math.abs(p.x-start.x)*PX,height:Math.abs(p.y-start.y)*PX,fill:'#c39a4a22',stroke:'#c39a4a'}):el('line',{x1:start.x*PX,y1:start.y*PX,x2:p.x*PX,y2:p.y*PX,stroke:'#c39a4a','stroke-width':3}))};$('svg').onpointerup=e=>{if(!start)return;const a=start,p=pt(e);start=null;$('preview').replaceChildren();if(['room','slab'].includes(S.tool)&&a.x!==p.x&&a.y!==p.y)addRoom(Math.min(a.x,p.x),Math.min(a.y,p.y),Math.abs(a.x-p.x),Math.abs(a.y-p.y));else if(S.tool==='wall'&&(a.x!==p.x||a.y!==p.y)){commit();const wall={id:crypto.randomUUID(),type:'wall',levelId:S.activeLevel,name:'جدار',x:a.x,y:a.y,x2:p.x,y2:p.y,layer:$('layer').value};S.shapes.push(wall);selectShape(wall.id)}else if(S.tool==='measure') addMeasurement({ x: a.x, y: a.y, x2: p.x, y2: p.y })};
 document.onclick=e=>{const t=e.target.closest('[data-tool]');if(t){S.tool=t.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===t));syncRectangleEditor();$('mode').textContent='وضع '+t.textContent.trim()}const o=e.target.closest('.object');if(o){selectShape(o.dataset.id)}const v=e.target.closest('[data-view]');if(v){document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===v));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v.dataset.view));if(v.dataset.view==='compliance')runChecks()}};
 function selectShape(id) {
   if (S.selected !== id) {
@@ -233,7 +234,7 @@ function renderLevels() {
   $('moveLevel').replaceChildren(new Option('اختر طابقًا', ''),
     ...ordered.filter(level => level.id !== active.id).map(levelOption));
   $('moveLevel').disabled = S.levels.length < 2 || !S.selected;
-  $('levelRemove').disabled = S.levels.length < 2 || levelShapes().length > 0;
+  $('levelRemove').disabled = S.levels.length < 2 || levelShapes().length > 0 || S.measurements.some(item => item.levelId === S.activeLevel);
 }
 
 function updateLevels(add) {
@@ -256,7 +257,7 @@ $('activeLevel').onchange = event => activateLevel(event.target.value);
 $('levelAdd').onclick = () => updateLevels(true);
 $('levelUpdate').onclick = () => updateLevels(false);
 $('levelRemove').onclick = () => {
-  if (S.levels.length < 2 || levelShapes().length) return;
+  if (S.levels.length < 2 || levelShapes().length || S.measurements.some(item => item.levelId === S.activeLevel)) return;
   commit();
   S.levels = S.levels.filter(level => level.id !== S.activeLevel);
   activateLevel(S.levels[0].id);
@@ -502,6 +503,66 @@ const csvCell = value => {
   const safeValue = typeof value === 'string' && /^[\s\uFEFF]*[=+@-]/.test(raw) ? "'" + raw : raw;
   return '"' + safeValue.replaceAll('"', '""') + '"';
 };
+const measurementFormat = new Intl.NumberFormat('ar-SA', { maximumSignificantDigits: 8 });
+function addMeasurement(points) {
+  const result = measureSegment(points);
+  if (!result || S.measurements.length >= measurementLimit) {
+    $('measurementStatus').textContent = result ? 'بلغ المشروع حدّ ٥٠٠ قياس.' : 'أدخل نقطتين مختلفتين بإحداثيات صالحة.';
+    $('mode').textContent = $('measurementStatus').textContent;
+    return false;
+  }
+  commit();
+  S.measurements.push({ ...points, levelId: S.activeLevel });
+  $('measurementStatus').textContent = 'أُضيف قياس بطول ' + measurementFormat.format(result.distance) + ' م.';
+  $('mode').textContent = $('measurementStatus').textContent;
+  render();
+  return true;
+}
+
+function renderMeasurements() {
+  const group = $('measurementMarks');
+  const rows = $('measurementRows');
+  group.replaceChildren();
+  rows.replaceChildren();
+  for (const [index, item] of S.measurements.entries()) {
+    if (item.levelId !== S.activeLevel) continue;
+    const { x, y, x2, y2 } = item;
+    const { dx, dy, distance } = measureSegment(item);
+    group.append(el('line', { x1: x * PX, y1: y * PX, x2: x2 * PX, y2: y2 * PX }));
+    const row = rows.insertRow();
+    for (const value of [dx, dy, distance]) row.insertCell().textContent = measurementFormat.format(value);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'حذف';
+    button.setAttribute('aria-label', 'حذف القياس ' + rows.rows.length);
+    button.onclick = () => {
+      commit();
+      S.measurements.splice(index, 1);
+      $('measurementStatus').textContent = 'حُذف القياس.';
+      render();
+    };
+    row.insertCell().append(button);
+  }
+  $('emptyMeasurements').hidden = rows.rows.length > 0;
+  $('measurementTable').hidden = rows.rows.length === 0;
+  $('exportMeasurements').disabled = S.measurements.length === 0;
+}
+
+$('measurementForm').onsubmit = event => {
+  event.preventDefault();
+  const ids = { x: 'measureX1', y: 'measureY1', x2: 'measureX2', y2: 'measureY2' };
+  const points = Object.fromEntries(Object.entries(ids).map(([key, id]) => [key, $(id).valueAsNumber]));
+  if (addMeasurement(points)) event.target.reset();
+};
+$('exportMeasurements').onclick = () => {
+  const rows = [['الطابق', 'X البداية (م)', 'Y البداية (م)', 'X النهاية (م)', 'Y النهاية (م)', 'فرق X (م)', 'فرق Y (م)', 'المسافة (م)']];
+  for (const item of S.measurements) {
+    const { dx, dy, distance } = measureSegment(item);
+    rows.push([elementLevel(item, S.levels).name, item.x, item.y, item.x2, item.y2, dx, dy, distance]);
+  }
+  dl('hayyanarsum-measurements.csv', '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+};
+
 let coordination;
 function clearCoordination() {
   if (!coordination) return;
@@ -1103,7 +1164,7 @@ function readProject(data) {
     if (Number.isFinite(price) && price >= 0 && price <= 1e12) prices[shape.id] = price;
   }
   const activeLevel = levels.some(level => level.id === data.activeLevel) ? data.activeLevel : levels[0].id;
-  return { schema: 2, project, shapes, prices, levels, activeLevel, selected: null, tool: 'select' };
+  return { schema: 2, project, shapes, measurements: cleanMeasurements(data.measurements, levels), prices, levels, activeLevel, selected: null, tool: 'select' };
 }
 function loadProjectFields() {
   for (const [id, key] of [['projectName','name'], ['projectCity','city'], ['revision','revision'], ['description','description']]) {

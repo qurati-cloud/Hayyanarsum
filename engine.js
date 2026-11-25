@@ -23,6 +23,24 @@ export const isLinear = shape => shape?.type === 'wall' || shape?.type === 'cadL
 export const length = shape => isLinear(shape) ? Math.hypot(shape.x2 - shape.x, shape.y2 - shape.y) : 0;
 export const totalArea = shapes => shapes.reduce((sum, shape) => sum + area(shape), 0);
 
+export const measurementLimit = 500;
+export function measureSegment({ x, y, x2, y2 }) {
+  if (![x, y, x2, y2].every(value => Number.isFinite(value) && Math.abs(value) <= 1e9)) return null;
+  const dx = x2 - x, dy = y2 - y;
+  const distance = Math.hypot(dx, dy);
+  return distance > 0 ? { dx, dy, distance } : null;
+}
+
+export function cleanMeasurements(items, levels) {
+  if (!Array.isArray(items)) return [];
+  const allowedLevels = new Set(levels.map(level => level.id));
+  return items.slice(0, measurementLimit).flatMap(item => {
+    if (!item || !allowedLevels.has(item.levelId) || !measureSegment(item)) return [];
+    const { levelId, x, y, x2, y2 } = item;
+    return [{ levelId, x, y, x2, y2 }];
+  });
+}
+
 export const groundLevel = Object.freeze({ id: 'ground', name: 'الطابق الأرضي', elevation: 0 });
 
 export function validateLevels(levels = [groundLevel]) {

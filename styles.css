@@ -44,3 +44,7 @@ button:disabled{opacity:.55;cursor:default}
 #fitDrawing.active,#snapCadEndpoints[aria-pressed="true"]{background:var(--sand);border-color:var(--gold)}
 
 .bar{flex-wrap:wrap;gap:6px}
+
+#measurementMarks{pointer-events:none}
+#measurementMarks line{stroke:#855a17;stroke-width:2;stroke-dasharray:5 3;vector-effect:non-scaling-stroke}
+#measurementForm{max-width:36rem}
