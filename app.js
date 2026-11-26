@@ -1,7 +1,7 @@
 import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefRoomConflict, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
-import { wallSlabClashes } from './coordination.js';
+import { roomWallFootprintReview, wallSlabClashes } from './coordination.js';
 import { exportBriefIfc, exportIfc, isIfcSlab, isIfcSpace, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
@@ -1451,6 +1451,9 @@ function clearBriefPlan() {
   $('briefModel').replaceChildren();
   $('briefPlanRooms').hidden = true;
   $('briefPlanRooms').replaceChildren();
+  $('briefWallReview').hidden = true;
+  $('briefWallReviewList').replaceChildren();
+  $('briefWallReviewOmitted').textContent = '';
   $('briefPlanStatus').textContent = '';
 }
 
@@ -1477,7 +1480,9 @@ function drawBriefPreview(plan) {
   for (const [index, room] of plan.rooms.entries()) {
     const left = x + room.x * scale, top = y + room.y * scale;
     const w = room.w * scale, h = room.h * scale;
-    const rectangle = el('rect', { x: left, y: top, width: w, height: h, fill: '#dceee4', stroke: '#0e5a40' });
+    const wallOverlap = plan.wallReview.overlaps.has(index);
+    const rectangle = el('rect', { x: left, y: top, width: w, height: h,
+      fill: wallOverlap ? '#f3e0be' : '#dceee4', stroke: wallOverlap ? '#956a28' : '#0e5a40' });
     const title = el('title');
     title.textContent = room.name + ' · ' + thermalLabel(room.w) + ' × ' + thermalLabel(room.h) + ' م';
     rectangle.append(title);
@@ -1501,7 +1506,8 @@ function drawBriefPreview(plan) {
   }
   canvas.setAttribute('aria-label', 'حد الأرض وتوزيع الفراغات بالمقياس النسبي' +
     (plan.envelope ? ' مع الحد المرجعي المتقطع' : '') +
-    (plan.existingRooms.length ? ' والفراغات القائمة بالرمادي' : ''));
+    (plan.existingRooms.length ? ' والفراغات القائمة بالرمادي' : '') +
+    (plan.wallReview.overlaps.size ? ' والفراغات ذات تداخل مع مسقط جدار بالذهبي' : ''));
   canvas.hidden = false;
   const legend = $('briefPlanRooms');
   legend.replaceChildren(...plan.rooms.map((room, index) => {
@@ -1514,6 +1520,16 @@ function drawBriefPreview(plan) {
     return item;
   }));
   legend.hidden = false;
+  const { overlaps, omitted } = plan.wallReview;
+  const review = $('briefWallReviewList');
+  review.replaceChildren(...Array.from(overlaps, ([index, { wall, area }]) => {
+    const item = document.createElement('li');
+    item.textContent = thermalLabel(index + 1) + ' · ' + plan.rooms[index].name +
+      ' · ' + (wall.name || 'جدار') + ' · ' + thermalLabel(area) + ' م²';
+    return item;
+  }));
+  $('briefWallReview').hidden = !overlaps.size && !omitted;
+  $('briefWallReviewOmitted').textContent = omitted ? 'جدران تعذّر فحص مسقطها: ' + thermalLabel(omitted) + '.' : '';
   const solids = plan.rooms.filter(room => validHeight(room.z));
   $('briefModelPanel').hidden = solids.length === 0;
   $('briefModelNote').textContent = 'فراغات لها ارتفاع محدد: ' + thermalLabel(solids.length) +
@@ -1709,6 +1725,7 @@ $('briefLayoutForm').onsubmit = event => {
   const roomConflict = briefRoomConflict(plan.rooms, floor.shapes);
   briefPlan = { ...plan, levelId: level.id, level: { ...level }, occupied, roomConflict,
     existingRooms: floor.shapes.filter(shape => shape.type === 'room'),
+    wallReview: roomWallFootprintReview(plan.rooms, floor.shapes),
     floorSnapshot: JSON.stringify(floor),
     rooms: plan.rooms.map(room => ({ ...room, id: crypto.randomUUID() })),
     roomEdges: $('briefUseRoomEdges').checked ? briefRoomEdges(plan.rooms) : undefined };

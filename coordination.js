@@ -50,6 +50,38 @@ function intersectionArea(polygon, [left, bottom, right, top]) {
   return Math.abs(areaTwice) / 2;
 }
 
+export function roomWallFootprintReview(rooms, floorShapes) {
+  const walls = [];
+  let omitted = 0;
+  for (const wall of floorShapes) {
+    if (wall.type !== 'wall') continue;
+    if (!valid(wall) || wall.thickness == null) {
+      omitted++;
+      continue;
+    }
+    const footprint = wallFootprint(wall, 0, length(wall));
+    const bounds = boundsOf(footprint);
+    if (!bounds.every(Number.isFinite)) {
+      omitted++;
+      continue;
+    }
+    walls.push({ wall, footprint, bounds });
+  }
+  const overlaps = new Map();
+  for (const [index, room] of rooms.entries()) {
+    const rectangle = [room.x, room.y, room.x + room.w, room.y + room.h];
+    let largest = minimumReportedOverlap;
+    for (const { wall, bounds, footprint } of walls) {
+      if (!intersects(bounds, rectangle)) continue;
+      const area = intersectionArea(footprint, rectangle);
+      if (!Number.isFinite(area) || area <= largest) continue;
+      largest = area;
+      overlaps.set(index, { wall, area });
+    }
+  }
+  return { overlaps, omitted };
+}
+
 export function wallSlabClashes(shapes, levels = [groundLevel]) {
   const walls = [];
   const slabs = [];

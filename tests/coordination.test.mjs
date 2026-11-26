@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { wallSlabClashes } from '../coordination.js';
+import { roomWallFootprintReview, wallSlabClashes } from '../coordination.js';
 import { groundLevel } from '../engine.js';
 
 const wall = { id: 'w1', type: 'wall', x: 0, y: 1, x2: 4, y2: 1, z: 3, thickness: .2, openings: [] };
@@ -45,4 +45,32 @@ test('large result sets are explicitly reported as incomplete', () => {
   const result = wallSlabClashes([...walls, ...slabs], levelsAt(3));
   assert.equal(result.complete, false);
   assert.equal(result.pairs.length, 2000);
+});
+
+test('room footprint review reports the largest wall overlap, ignoring face contact and unmodeled walls', () => {
+  const room = { type: 'room', x: 1, y: 1, w: 2, h: 2 };
+  const smaller = { ...wall, thickness: .25, openings: [{ kind: 'door', offset: 1, width: 2, sill: 0, height: 2 }] };
+  const larger = { ...wall, id: 'wide', thickness: .5, y: 2, y2: 2 };
+  const centerline = { ...wall, thickness: null, z: null, openings: null };
+  const touching = { ...larger, id: 'touch', y: .75, y2: .75 };
+  const other = { ...smaller, type: 'cadLine' };
+  const { overlaps, omitted } = roomWallFootprintReview([room, { ...room, y: 5 }],
+    [smaller, larger, centerline, touching, other]);
+  assert.equal(omitted, 1);
+  assert.equal(overlaps.size, 1);
+  assert.equal(overlaps.get(0).wall, larger);
+  near(overlaps.get(0).area, 1);
+  near(roomWallFootprintReview([room], [smaller]).overlaps.get(0).area, .25);
+  assert.equal(roomWallFootprintReview([room], [touching]).overlaps.size, 0);
+});
+
+test('rotated room-wall footprint review clips polygons and rejects bounding-box false positives', () => {
+  const offset = 1_000_000;
+  const diagonal = { ...wall, x: offset - 2, y: offset - 2, x2: offset + 3, y2: offset + 3 };
+  const sameOriginRoom = { type: 'room', x: offset, y: offset, w: 1, h: 1 };
+  const falsePositive = { ...sameOriginRoom, x: offset - 1.5, y: offset + 1.5 };
+  const { overlaps } = roomWallFootprintReview([sameOriginRoom, falsePositive], [diagonal]);
+  const projectedHalfThickness = .2 / Math.SQRT2;
+  near(overlaps.get(0).area, 2 * projectedHalfThickness - projectedHalfThickness ** 2);
+  assert.equal(overlaps.size, 1);
 });
