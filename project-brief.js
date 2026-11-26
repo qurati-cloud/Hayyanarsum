@@ -297,8 +297,50 @@ export function customRoomBlockPlan(brief, layout, rooms) {
   return placeRoomBlocks(brief, layout, rooms);
 }
 
+const sameCoordinate = (a, b) => fits(a, b) && fits(b, a);
+
+export function briefRoomEdges(rooms) {
+  const edges = [];
+  for (const horizontal of [true, false]) {
+    const spans = rooms.flatMap(({ x, y, w, h }) => horizontal
+      ? [{ axis: y, start: x, end: x + w }, { axis: y + h, start: x, end: x + w }]
+      : [{ axis: x, start: y, end: y + h }, { axis: x + w, start: y, end: y + h }]);
+    spans.sort((a, b) => a.axis - b.axis);
+    const groups = [];
+    for (const { axis, start, end } of spans) {
+      if (end <= start) continue;
+      let group = groups.at(-1);
+      if (!group || !sameCoordinate(group.axis, axis)) {
+        group = { axis, events: [] };
+        groups.push(group);
+      }
+      group.events.push({ position: start, delta: 1 }, { position: end, delta: -1 });
+    }
+    for (const { axis, events } of groups) {
+      const points = [];
+      for (const { position, delta } of events.sort((a, b) => a.position - b.position)) {
+        const last = points.at(-1);
+        if (last && sameCoordinate(last.position, position)) last.delta += delta;
+        else points.push({ position, delta });
+      }
+      let covering = 0;
+      for (let index = 0; index < points.length - 1; index++) {
+        const { position: start, delta } = points[index];
+        covering += delta;
+        if (covering <= 0) continue;
+        const end = points[index + 1].position;
+        edges.push({ type: 'cadLine', layer: 'CAD-REF', cadLayer: 'A-ROOM-EDGE',
+          name: 'حد فراغ مرجعي ' + (edges.length + 1),
+          x: horizontal ? start : axis, y: horizontal ? axis : start,
+          x2: horizontal ? end : axis, y2: horizontal ? axis : end });
+      }
+    }
+  }
+  return edges;
+}
+
 export function briefPreviewDxf(plan) {
-  const outlines = plan.rooms.map(room => ({ ...room, layer: 'A-ROOM' }));
+  const outlines = plan.roomEdges ?? plan.rooms.map(room => ({ ...room, layer: 'A-ROOM' }));
   return dxf([...plan.references, ...outlines]);
 }
 

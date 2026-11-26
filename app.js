@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomSchedule, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1284,6 +1284,7 @@ function loadBriefForm() {
   clearCitySuggestion();
   const saved = S.project.brief ?? {};
   $('briefFillPositions').checked = false;
+  $('briefUseRoomEdges').checked = false;
   $('briefDescription').value = saved.description ?? '';
   for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
   $('briefUseSetbacks').checked = Boolean(saved.setbacks);
@@ -1422,6 +1423,11 @@ function drawBriefPreview(plan) {
       'dominant-baseline': 'middle', fill: '#073b2c', 'font-size': 13 });
     label.textContent = thermalLabel(index + 1);
     canvas.append(label);
+  }
+  for (const edge of plan.roomEdges ?? []) {
+    canvas.append(el('line', { x1: x + edge.x * scale, y1: y + edge.y * scale,
+      x2: x + edge.x2 * scale, y2: y + edge.y2 * scale, stroke: '#3e6f8c',
+      'stroke-width': 2, 'stroke-dasharray': '4 2' }));
   }
   if (plan.envelope) {
     const { left, front, right, rear } = plan.envelope;
@@ -1628,8 +1634,9 @@ $('briefLayoutForm').onsubmit = event => {
   }
   const level = elementLevel({ levelId: S.activeLevel }, S.levels);
   briefPlan = { ...plan, levelId: level.id, level: { ...level },
-    rooms: plan.rooms.map(room => ({ ...room, id: crypto.randomUUID() })) };
-  drawBriefPreview(plan);
+    rooms: plan.rooms.map(room => ({ ...room, id: crypto.randomUUID() })),
+    roomEdges: $('briefUseRoomEdges').checked ? briefRoomEdges(plan.rooms) : undefined };
+  drawBriefPreview(briefPlan);
   const empty = briefTargetIsEmpty();
   $('insertBriefPlan').disabled = !empty;
   $('exportBriefDxf').disabled = false;
@@ -1648,6 +1655,7 @@ $('briefLayoutForm').onsubmit = event => {
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
     thermalLabel(plan.rooms.length) + ' فراغات · مجموع مساحة الفراغات ' +
     thermalLabel(totalArea(plan.rooms)) + ' م². ' +
+    (briefPlan.roomEdges ? 'خطوط حدود الفراغات المرجعية ' + thermalLabel(briefPlan.roomEdges.length) + '. ' : '') +
     (layout.automatic ? 'الحد الأقصى للفراغات في الصف المقترح ' + thermalLabel(plan.columns) + '. ' : '') +
     (plan.envelope ? 'المساحة داخل الحدود المرجعية ' +
       thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
@@ -1724,7 +1732,7 @@ $('insertBriefPlan').onclick = () => {
     $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة.';
     return;
   }
-  const shapes = [...briefPlan.references, ...briefPlan.rooms];
+  const shapes = [...briefPlan.references, ...briefPlan.rooms, ...(briefPlan.roomEdges ?? [])];
   if (S.shapes.length + shapes.length > 5000 || !shapes.every(valid)) {
     $('briefPlanStatus').textContent = 'تعذّر إدراج التوزيع. تحقق من الأبعاد وحدّ عناصر المشروع.';
     return;

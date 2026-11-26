@@ -405,3 +405,33 @@ test('partial placement does not overwrite invalid, conflicting, or infeasible p
   assert.equal(customRoomBlockPlan(lot, layout, [fixed, { ...probe, x: 5 }]).error, 'outside');
   assert.equal(customRoomBlockPlan(lot, layout, [fixed, { ...probe, y: 0 }]).error, 'room-overlap');
 });
+
+test('room-edge references split partial shared boundaries without exporting duplicates', async () => {
+  const { briefRoomEdges, briefPreviewDxf, customRoomBlockPlan } = await import('../project-brief.js');
+  const { readDxf } = await import('../dxf-import.js');
+  const { wallFromCadLine } = await import('../engine.js');
+  const plan = customRoomBlockPlan({ frontage: 12, depth: 10 }, { coordinates: true }, [
+    { name: 'مجلس', x: 1, y: 1, w: 4, h: 5 },
+    { name: 'مطبخ', x: 5, y: 2, w: 3, h: 3 },
+  ]);
+  const roomEdges = briefRoomEdges(plan.rooms);
+  const sharedAxis = roomEdges.filter(edge => edge.x === 5 && edge.x2 === 5);
+  assert.deepEqual(sharedAxis.map(({ y, y2 }) => [y, y2]), [[1, 2], [2, 5], [5, 6]]);
+  assert.equal(roomEdges.length, 9);
+  const { lines } = readDxf(briefPreviewDxf({ ...plan, roomEdges }));
+  assert.equal(lines.filter(line => line.cadLayer === 'A-ROOM-EDGE').length, 9);
+  assert.equal(lines.filter(line => line.cadLayer === 'SITE-LOT').length, 4);
+  assert.ok(!lines.some(line => line.cadLayer === 'A-ROOM'));
+  const wall = wallFromCadLine(sharedAxis[1], { name: 'جدار مقترح', thickness: 0.2, z: 3 });
+  assert.deepEqual([wall.x, wall.y, wall.x2, wall.y2, wall.thickness, wall.z], [5, 2, 5, 5, 0.2, 3]);
+});
+
+test('room edges leave real gaps and merge only floating-point differences at shared boundaries', async () => {
+  const { briefRoomEdges } = await import('../project-brief.js');
+  const edges = briefRoomEdges([
+    { x: 0.1, y: 0, w: 0.2, h: 1 }, { x: 0.3, y: 0, w: 1, h: 1 },
+    { x: 2, y: 0, w: 1, h: 1 },
+  ]);
+  assert.equal(edges.filter(({ x, x2 }) => x === 0.3 && x2 === 0.3).length, 1);
+  assert.ok(edges.filter(({ y, y2 }) => y === 0 && y2 === 0).every(({ x, x2 }) => x >= 2 || x2 <= 1.3));
+});
