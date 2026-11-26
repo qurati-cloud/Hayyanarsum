@@ -176,27 +176,68 @@ function layoutRows(blocks, columns, x, y, bounds) {
   return rooms;
 }
 
-function layoutWithCoordinates(blocks, bounds, outside) {
-  const rooms = [];
-  for (const block of blocks) {
-    const { x, y, w, h } = block;
-    const right = x + w, rear = y + h;
-    if (!validCoordinate(x) || !validCoordinate(y) || right <= x || rear <= y) {
-      return { error: 'coordinates', names: [block.name] };
-    }
-    if (!fits(bounds.left, x) || !fits(bounds.front, y) || !fits(right, bounds.right) || !fits(rear, bounds.rear)) {
-      return { error: outside, names: [block.name] };
-    }
-    const overlap = rooms.find(room =>
-      !fits(right, room.x) && !fits(room.x + room.w, x) &&
-      !fits(rear, room.y) && !fits(room.y + room.h, y));
-    if (overlap) return { error: 'room-overlap', names: [overlap.name, block.name] };
-    rooms.push(roomShape(block, x, y));
-  }
-  return { rooms };
+function intervalsOverlap(start, end, otherStart, otherEnd) {
+  return !fits(end, otherStart) && !fits(otherEnd, start);
 }
 
-function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic, coordinates }, blocks) {
+function proposedCoordinate(block, bounds, placed) {
+  const yOptions = block.y == null
+    ? [...new Set([bounds.front, ...placed.map(room => room.y + room.h)])].sort((a, b) => a - b)
+    : [block.y];
+  const ordered = [...placed].sort((a, b) => a.x - b.x);
+  for (const y of yOptions) {
+    if (!fits(y + block.h, bounds.rear)) continue;
+    let x = block.x ?? bounds.left;
+    for (const room of ordered) {
+      if (!intervalsOverlap(y, y + block.h, room.y, room.y + room.h)) continue;
+      if (fits(x + block.w, room.x)) break;
+      if (fits(room.x + room.w, x)) continue;
+      if (block.x != null) {
+        x = Infinity;
+        break;
+      }
+      x = room.x + room.w;
+    }
+    if (fits(x + block.w, bounds.right)) return { x, y };
+  }
+  return null;
+}
+
+function layoutWithCoordinates(blocks, bounds, outside, fillMissing) {
+  const rooms = [];
+  const suggestedIndices = [];
+  const indices = blocks.map((_, index) => index);
+  const missingCount = ({ x, y }) => Number(x == null) + Number(y == null);
+  // Reserve fully specified rectangles first, then honor single-axis constraints before free placements.
+  if (fillMissing) indices.sort((a, b) => missingCount(blocks[a]) - missingCount(blocks[b]));
+  const placed = [];
+  for (const index of indices) {
+    const block = blocks[index];
+    let { x, y } = block;
+    const { w, h } = block;
+    const missing = missingCount(block);
+    const allowed = value => validCoordinate(value) || (fillMissing && value == null);
+    if (!allowed(x) || !allowed(y)) return { error: 'coordinates', names: [block.name] };
+    if ((x != null && (!fits(bounds.left, x) || !fits(x + w, bounds.right))) ||
+        (y != null && (!fits(bounds.front, y) || !fits(y + h, bounds.rear)))) return { error: outside, names: [block.name] };
+    if (missing) {
+      const proposal = proposedCoordinate(block, bounds, placed);
+      if (!proposal) return { error: 'partial-fit', names: [block.name] };
+      ({ x, y } = proposal);
+      suggestedIndices.push(index);
+    }
+    if (x + w <= x || y + h <= y) return { error: 'coordinates', names: [block.name] };
+    const overlap = placed.find(room =>
+      intervalsOverlap(x, x + w, room.x, room.x + room.w) &&
+      intervalsOverlap(y, y + h, room.y, room.y + room.h));
+    if (overlap) return { error: 'room-overlap', names: [overlap.name, block.name] };
+    rooms[index] = roomShape(block, x, y);
+    placed.push(rooms[index]);
+  }
+  return { rooms, suggestedIndices };
+}
+
+function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic, coordinates, fillMissing }, blocks) {
   const { frontage, depth } = cleanBrief(brief);
   if (!frontage || !depth) return { error: 'brief' };
   if (!blocks.length || blocks.length > 100 || blocks.some(({ name, w, h }) =>
@@ -218,7 +259,7 @@ function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic, coordinate
   if (envelope) references.push(...rectangularReferences(envelope, 'SITE-LIMIT', 'حد مرجعي للتوزيع'));
   const site = { frontage, depth, envelope, references };
   if (coordinates) {
-    const placement = layoutWithCoordinates(blocks, bounds, outside);
+    const placement = layoutWithCoordinates(blocks, bounds, outside, fillMissing);
     return placement.error ? placement : { ...site, ...placement };
   }
 

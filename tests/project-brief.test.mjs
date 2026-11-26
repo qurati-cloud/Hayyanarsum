@@ -373,3 +373,35 @@ test('the room schedule preserves preview order and metric quantities, leaving u
   ]);
   assert.equal(plan.rooms[1].z, null);
 });
+
+test('partial placement reserves both entered axes and positions single-axis rooms before unconstrained rooms', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const lot = { frontage: 11, depth: 9 };
+  const layout = { coordinates: true, fillMissing: true, setbacks: { left: 1, right: 1, front: 1, rear: 1 } };
+  const rooms = [
+    { name: 'مخزن', w: 2, h: 2 },
+    { name: 'مطبخ', w: 4, h: 3, x: 1 },
+    { name: 'مجلس', w: 5, h: 4, x: 1, y: 1 },
+    { name: 'حمام', w: 2, h: 3, y: 1 },
+  ];
+  const result = customRoomBlockPlan(lot, layout, rooms);
+  assert.deepEqual(result.suggestedIndices, [1, 3, 0]);
+  assert.deepEqual(result.rooms.map(({ name, x, y, w, h }) => [name, x, y, w, h]), [
+    ['مخزن', 8, 1, 2, 2], ['مطبخ', 1, 5, 4, 3], ['مجلس', 1, 1, 5, 4], ['حمام', 6, 1, 2, 3],
+  ]);
+  assert.equal(rooms[0].x, undefined);
+  assert.equal(customRoomBlockPlan(lot, { ...layout, fillMissing: false }, rooms).error, 'coordinates');
+});
+
+test('partial placement does not overwrite invalid, conflicting, or infeasible pinned constraints', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const lot = { frontage: 6, depth: 6 };
+  const layout = { coordinates: true, fillMissing: true };
+  const fixed = { name: 'مجلس', x: 0, y: 0, w: 3, h: 6 };
+  const probe = { name: 'مطبخ', x: 1, w: 2, h: 2 };
+  assert.deepEqual(customRoomBlockPlan(lot, layout, [probe, fixed]),
+    { error: 'partial-fit', names: ['مطبخ'] });
+  assert.equal(customRoomBlockPlan(lot, layout, [fixed, { ...probe, x: NaN }]).error, 'coordinates');
+  assert.equal(customRoomBlockPlan(lot, layout, [fixed, { ...probe, x: 5 }]).error, 'outside');
+  assert.equal(customRoomBlockPlan(lot, layout, [fixed, { ...probe, y: 0 }]).error, 'room-overlap');
+});
