@@ -1,7 +1,7 @@
 import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefRoomConflict, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
-import { roomWallFootprintReview, wallSlabClashes } from './coordination.js';
+import { roomWallFootprintReview, roomWallReviewRows, wallSlabClashes } from './coordination.js';
 import { exportBriefIfc, exportIfc, isIfcSlab, isIfcSpace, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
@@ -1520,7 +1520,7 @@ function drawBriefPreview(plan) {
     return item;
   }));
   legend.hidden = false;
-  const { overlaps, omitted } = plan.wallReview;
+  const { overlaps, omitted, examined } = plan.wallReview;
   const review = $('briefWallReviewList');
   review.replaceChildren(...Array.from(overlaps, ([index, { wall, area }]) => {
     const item = document.createElement('li');
@@ -1528,8 +1528,9 @@ function drawBriefPreview(plan) {
       ' · ' + (wall.name || 'جدار') + ' · ' + thermalLabel(area) + ' م²';
     return item;
   }));
-  $('briefWallReview').hidden = !overlaps.size && !omitted;
-  $('briefWallReviewOmitted').textContent = omitted ? 'جدران تعذّر فحص مسقطها: ' + thermalLabel(omitted) + '.' : '';
+  $('briefWallReview').hidden = !examined && !omitted;
+  $('briefWallReviewOmitted').textContent = 'الجدران المفحوصة ' + thermalLabel(examined) + ' · تعذّر فحص ' +
+    thermalLabel(omitted) + (examined && !overlaps.size ? ' · لم يظهر تداخل ضمن الجدران المفحوصة' : '');
   const solids = plan.rooms.filter(room => validHeight(room.z));
   $('briefModelPanel').hidden = solids.length === 0;
   $('briefModelNote').textContent = 'فراغات لها ارتفاع محدد: ' + thermalLabel(solids.length) +
@@ -1538,6 +1539,12 @@ function drawBriefPreview(plan) {
 }
 
 const briefFloorContents = () => ({ shapes: levelShapes(), measurements: levelMeasurements() });
+
+function briefFloorMatches(plan) {
+  const level = S.levels.find(item => item.id === S.activeLevel);
+  return level?.id === plan.levelId && level.name === plan.level.name &&
+    level.elevation === plan.level.elevation && plan.floorSnapshot === JSON.stringify(briefFloorContents());
+}
 
 function updateBriefInsertButton() {
   $('insertBriefPlan').disabled = !briefPlan || Boolean(briefPlan.roomConflict) ||
@@ -1803,6 +1810,21 @@ $('exportBriefSchedule').onclick = () => {
   dl('hayyanarsum-layout-preview-rooms.csv',
     '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
+$('exportBriefWallReview').onclick = () => {
+  if (!briefPlan || (!briefPlan.wallReview.examined && !briefPlan.wallReview.omitted)) return;
+  if (!briefFloorMatches(briefPlan)) {
+    clearBriefPlan();
+    $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة لتنزيل تقرير الجدران.';
+    return;
+  }
+  const rows = [
+    ['رقم المعاينة', 'الفراغ', 'الطابق', 'المنسوب (م)', 'نتيجة المراجعة', 'الجدار صاحب أكبر تداخل',
+      'معرّف الجدار', 'مساحة التداخل (م²)', 'الجدران المفحوصة', 'الجدران التي تعذّر فحصها', 'نطاق المراجعة'],
+    ...roomWallReviewRows(briefPlan),
+  ];
+  dl('hayyanarsum-layout-wall-review.csv',
+    '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+};
 $('exportBriefIfc').onclick = () => {
   if (!briefPlan) return;
   const level = elementLevel(briefPlan, S.levels);
@@ -1823,9 +1845,7 @@ $('exportBriefIfc').onclick = () => {
   }
 };
 $('insertBriefPlan').onclick = () => {
-  const level = S.levels.find(item => item.id === S.activeLevel);
-  if (!briefPlan || !level || briefPlan.levelId !== level.id || briefPlan.level.name !== level.name ||
-      briefPlan.level.elevation !== level.elevation || briefPlan.floorSnapshot !== JSON.stringify(briefFloorContents())) {
+  if (!briefPlan || !briefFloorMatches(briefPlan)) {
     clearBriefPlan();
     $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة.';
     return;

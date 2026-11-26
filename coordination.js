@@ -79,7 +79,18 @@ export function roomWallFootprintReview(rooms, floorShapes) {
       overlaps.set(index, { wall, area });
     }
   }
-  return { overlaps, omitted };
+  return { overlaps, omitted, examined: walls.length };
+}
+
+export function roomWallReviewRows({ rooms, level, wallReview }) {
+  const { overlaps, examined, omitted } = wallReview;
+  const method = 'مسقط أفقي كامل للجدار؛ الفتحات والمناسيب خارج الفحص';
+  return rooms.map((room, index) => {
+    const match = overlaps.get(index);
+    const result = match ? 'تداخل مرصود' : examined ? 'لم يظهر تداخل ضمن الجدران المفحوصة' : 'تعذّر الفحص';
+    return [index + 1, room.name, level.name, level.elevation, result,
+      match?.wall.name || '', match?.wall.id ?? '', match?.area ?? '', examined, omitted, method];
+  });
 }
 
 export function wallSlabClashes(shapes, levels = [groundLevel]) {

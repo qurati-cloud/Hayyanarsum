@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { roomWallFootprintReview, wallSlabClashes } from '../coordination.js';
+import { roomWallFootprintReview, roomWallReviewRows, wallSlabClashes } from '../coordination.js';
 import { groundLevel } from '../engine.js';
 
 const wall = { id: 'w1', type: 'wall', x: 0, y: 1, x2: 4, y2: 1, z: 3, thickness: .2, openings: [] };
@@ -73,4 +73,24 @@ test('rotated room-wall footprint review clips polygons and rejects bounding-box
   const projectedHalfThickness = .2 / Math.SQRT2;
   near(overlaps.get(0).area, 2 * projectedHalfThickness - projectedHalfThickness ** 2);
   assert.equal(overlaps.size, 1);
+});
+
+test('wall review export distinguishes overlap, no measured overlap, and walls without usable geometry', () => {
+  const rooms = [
+    { type: 'room', name: 'مجلس', x: 1, y: 1, w: 2, h: 2 },
+    { type: 'room', name: 'غرفة', x: 5, y: 5, w: 2, h: 2 },
+  ];
+  const level = { name: 'السرداب', elevation: -2.5 };
+  const legacy = { ...wall, id: 'legacy', z: null, thickness: null, openings: null };
+  const wallReview = roomWallFootprintReview(rooms, [{ ...wall, name: 'جدار' }, legacy]);
+  const rows = roomWallReviewRows({ rooms, level, wallReview });
+  assert.deepEqual(rows[0].slice(0, 7), [1, 'مجلس', 'السرداب', -2.5, 'تداخل مرصود', 'جدار', 'w1']);
+  near(rows[0][7], .2);
+  assert.deepEqual(rows[0].slice(8, 10), [1, 1]);
+  assert.deepEqual(rows[1].slice(0, 10), [
+    2, 'غرفة', 'السرداب', -2.5, 'لم يظهر تداخل ضمن الجدران المفحوصة', '', '', '', 1, 1,
+  ]);
+  assert.match(rows[0][10], /الفتحات والمناسيب خارج الفحص/);
+  const skipped = roomWallReviewRows({ rooms, level, wallReview: roomWallFootprintReview(rooms, [legacy]) });
+  assert.deepEqual(skipped[0].slice(4, 10), ['تعذّر الفحص', '', '', '', 0, 1]);
 });
