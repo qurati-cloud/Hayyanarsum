@@ -1340,11 +1340,14 @@ function renderBriefEvidence(evidence = {}) {
     depth: 'عمق الأرض', storeys: 'عدد الطوابق', bedrooms: 'عدد غرف النوم' };
   const list = $('briefEvidenceList');
   list.replaceChildren();
-  $('briefEvidence').hidden = Object.keys(evidence).length === 0;
+  const panel = $('briefEvidence');
+  panel.hidden = Object.keys(evidence).length === 0;
+  if (panel.hidden) panel.open = false;
   for (const key of Object.keys(briefFields)) {
-    for (const { value, line, text } of evidence[key] ?? []) {
+    const candidates = evidence[key] ?? [];
+    for (const { value, line, text } of candidates) {
       const label = typeof value === 'number'
-        ? thermalLabel(value) + (key === 'frontage' || key === 'depth' ? ' م' : '')
+        ? value.toLocaleString('ar-SA', { maximumSignificantDigits: 21 }) + (key === 'frontage' || key === 'depth' ? ' م' : '')
         : key === 'kind' ? Array.from(briefField(key).options).find(option => option.value === value)?.text ?? value
           : value;
       const item = document.createElement('li');
@@ -1352,6 +1355,20 @@ function renderBriefEvidence(evidence = {}) {
       const quote = document.createElement('bdi');
       quote.textContent = '«' + text + '»';
       item.append(quote);
+      if (candidates.length > 1) {
+        const select = document.createElement('button');
+        select.type = 'button';
+        select.textContent = 'استخدم هذه القيمة';
+        select.setAttribute('aria-label', 'استخدم ' + label + ' في حقل ' + labels[key]);
+        select.onclick = () => {
+          const field = briefField(key);
+          field.value = String(value);
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          $('briefStatus').textContent = 'نُقلت القيمة إلى حقل ' + labels[key] + '.';
+          field.focus();
+        };
+        item.append(' ', select);
+      }
       list.append(item);
     }
   }
@@ -1422,8 +1439,9 @@ $('briefExtractForm').onsubmit = event => {
     if (!manuallyEditedBriefFields.has(key)) briefField(key).value = data[key] ?? '';
   }
   renderBriefQuestions();
-  const missing = missingBriefFields(readBriefFields()).length;
-  const summary = missing ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المشروع الأولية. راجعها قبل الحفظ.';
+  const missing = missingBriefFields(readBriefFields());
+  if (missing.some(key => conflicts.includes(key))) $('briefEvidence').open = true;
+  const summary = missing.length ? 'راجع الحقول الظاهرة وأكمل البيانات المطلوبة.' : 'اكتملت بيانات المشروع الأولية. راجعها قبل الحفظ.';
   const incomplete = rooms.filter(room => !room.w || !room.h).length;
   const setbackSummary = setbacks && $('briefUseSetbacks').checked ? ' راجع الارتدادات في قسم المعاينة.' : '';
   const positionSummary = containsPositions && !manuallyEditedBriefRooms
