@@ -1,4 +1,4 @@
-import { dxf, normalizeNumericInput, residentialRoomMetadata } from './engine.js';
+import { dxf, normalizeNumericInput, residentialRoomMetadata, validHeight } from './engine.js';
 
 export const briefFields = {
   kind: { question: 'ما نوع المبنى السكني؟' },
@@ -151,9 +151,9 @@ function rectangularReferences({ left, right, front, rear }, cadLayer, name) {
   });
 }
 
-function roomShape({ name, w, h, roomUse }, x, y) {
+function roomShape({ name, w, h, roomUse, z }, x, y) {
   return { type: 'room', layer: 'A-WALL', name: name.trim().slice(0, 160),
-    ...residentialRoomMetadata(roomUse, false), x, y, w, h, z: null };
+    ...residentialRoomMetadata(roomUse, false), x, y, w, h, z: validHeight(z) ? z : null };
 }
 
 const validCoordinate = value => Number.isFinite(value) && value >= 0 && value <= 1e6;
@@ -278,7 +278,8 @@ export function cleanBriefRooms(rooms) {
     return [{ name: room.name.trim().slice(0, 160), roomUse: residentialRoomMetadata(room.roomUse, false).roomUse,
       w: dimension(room.w), h: dimension(room.h),
       ...(validCoordinate(room.x) ? { x: room.x } : {}),
-      ...(validCoordinate(room.y) ? { y: room.y } : {}) }];
+      ...(validCoordinate(room.y) ? { y: room.y } : {}),
+      ...(validHeight(room.z) ? { z: room.z } : {}) }];
   });
 }
 
@@ -286,15 +287,17 @@ const customRoomPrefix = /^(?:فراغ|space|espace)\s+/iu;
 const roomDimensions = new RegExp('^' + decimal + String.raw`\s*(?:×|x|في|par|by)\s*` +
   decimal + String.raw`\s*` + metricUnit + '\\.?$', 'iu');
 
-const roomPosition = /^\s*(?:الموضع|موضع|position)\s*:\s*(.*?)\s*$/iu;
+const roomClause = /^\s*(الموضع|موضع|position|الارتفاع|ارتفاع|height|hauteur)\s*:\s*(.*?)\s*$/iu;
+const roomHeight = new RegExp('^' + decimal + '\\s*' + metricUnit + '\\.?$', 'iu');
 
 export function extractBriefRooms(description) {
   const rooms = new Map();
   const positions = new Map();
+  const heights = new Map();
   const unresolved = new Set();
   for (const line of description.slice(0, 4000).normalize('NFKC').split(/\r?\n/u)) {
-    const [roomText, ...positionText] = line.split(/[;؛]/u);
-    const clauses = positionText.map(part => roomPosition.exec(part));
+    const [roomText, ...details] = line.split(/[;؛]/u);
+    const clauses = details.map(part => roomClause.exec(part));
     if (clauses.some(clause => !clause)) continue;
     const [rawName, rawDimensions, ...extra] = roomText.split(':');
     if (rawDimensions === undefined || extra.length) continue;
@@ -307,8 +310,16 @@ export function extractBriefRooms(description) {
     const use = Object.keys(roomLabels).find(type => roomLabels[type].test(kind));
     if ((!use && !custom) || (!rooms.has(key) && rooms.size >= 100)) continue;
 
-    for (const [, rawPosition] of clauses) {
-      const match = roomDimensions.exec(normalizeNumericInput(rawPosition));
+    for (const [, label, rawValue] of clauses) {
+      const value = normalizeNumericInput(rawValue);
+      if (/^(?:الارتفاع|ارتفاع|height|hauteur)$/iu.test(label)) {
+        const match = roomHeight.exec(value);
+        const height = match ? Number(match[1].replace(',', '.')) : NaN;
+        const previous = heights.get(key);
+        heights.set(key, validHeight(height) && (previous === undefined || previous === height) ? height : null);
+        continue;
+      }
+      const match = roomDimensions.exec(value);
       const pair = match?.slice(1, 3).map(value => Number(value.replace(',', '.')));
       const previous = positions.get(key);
       if (!pair?.every(validCoordinate) || previous === null ||
@@ -328,8 +339,8 @@ export function extractBriefRooms(description) {
   }
   return [...rooms].map(([key, room]) => {
     const dimensions = unresolved.has(key) ? { ...room, w: null, h: null } : room;
-    if (!positions.has(key)) return dimensions;
     const [x, y] = positions.get(key) ?? [null, null];
-    return { ...dimensions, x, y };
+    return { ...dimensions, ...(positions.has(key) ? { x, y } : {}),
+      ...(heights.has(key) ? { z: heights.get(key) } : {}) };
   });
 }

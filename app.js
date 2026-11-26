@@ -1391,6 +1391,8 @@ function clearBriefPlan() {
   $('refineBriefPositions').hidden = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
+  $('briefModelPanel').hidden = true;
+  $('briefModel').replaceChildren();
   $('briefPlanRooms').hidden = true;
   $('briefPlanRooms').replaceChildren();
   $('briefPlanStatus').textContent = '';
@@ -1432,10 +1434,16 @@ function drawBriefPreview(plan) {
   legend.replaceChildren(...plan.rooms.map((room, index) => {
     const item = document.createElement('li');
     item.textContent = thermalLabel(index + 1) + ' · ' + room.name + ' · ' +
-      thermalLabel(room.w) + ' × ' + thermalLabel(room.h) + ' م';
+      thermalLabel(room.w) + ' × ' + thermalLabel(room.h) + ' م' +
+      (validHeight(room.z) ? ' · الارتفاع ' + thermalLabel(room.z) + ' م' : '');
     return item;
   }));
   legend.hidden = false;
+  const solids = plan.rooms.filter(room => validHeight(room.z));
+  $('briefModelPanel').hidden = solids.length === 0;
+  $('briefModelNote').textContent = 'فراغات لها ارتفاع محدد: ' + thermalLabel(solids.length) +
+    ' من ' + thermalLabel(plan.rooms.length) + '.';
+  drawModelFaces($('briefModel'), roomProjection(solids, 35), null);
 }
 
 const briefTargetIsEmpty = () => levelShapes().length === 0 && levelMeasurements().length === 0;
@@ -1471,6 +1479,7 @@ function addBriefRoom(room = {}) {
     '<label>الاستخدام<select data-room="use"><option value="">غير محدد</option></select></label></div>' +
     '<div class="two"><label>العرض (م)<input data-room="width" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label>' +
     '<label>العمق (م)<input data-room="depth" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required></label></div>' +
+    '<label>الارتفاع للعرض الثلاثي (م، اختياري)<input data-room="z" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any"></label>' +
     '<div class="two" data-room-placement hidden>' +
     '<label>موضع X (م)<input data-room="x" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required disabled></label>' +
     '<label>موضع Y (م)<input data-room="y" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required disabled></label></div>' +
@@ -1481,6 +1490,8 @@ function addBriefRoom(room = {}) {
   use.value = room.roomUse ?? '';
   row.querySelector('[data-room="width"]').value = room.w ?? '';
   row.querySelector('[data-room="depth"]').value = room.h ?? '';
+  row.querySelector('[data-room="z"]').value = room.z ?? '';
+  if (room.z === null) row.querySelector('[data-room="z"]').placeholder = 'راجع الارتفاع المذكور في الوصف';
   row.querySelector('[data-room="x"]').value = room.x ?? '';
   row.querySelector('[data-room="y"]').value = room.y ?? '';
   updateBriefRoomPosition(row, $('briefPlacement').value === 'coordinates');
@@ -1500,7 +1511,7 @@ function briefCustomRooms() {
     const field = name => row.querySelector('[data-room="' + name + '"]');
     return { name: field('name').value, roomUse: field('use').value,
       w: numericValue(field('width')), h: numericValue(field('depth')),
-      x: numericValue(field('x')), y: numericValue(field('y')) };
+      x: numericValue(field('x')), y: numericValue(field('y')), z: numericValue(field('z')) };
   });
 }
 
@@ -1766,8 +1777,6 @@ try {
 }
 function render3d() {
   if ($('preview3d').hidden) return;
-  const canvas = $('model3d');
-  canvas.replaceChildren();
   const walls = S.shapes.filter(shape => shape.type === 'wall' && validHeight(shape.z));
   const slabs = S.shapes.filter(isIfcSlab);
   const shaped = walls.length || slabs.length ? [...walls, ...slabs] : S.shapes.filter(shape => shape.type === 'room' && validHeight(shape.z));
@@ -1776,6 +1785,10 @@ function render3d() {
     ? 'الجدران: ' + walls.length + ' · البلاطات: ' + slabs.length
     : shaped.length ? 'المساحات المجسّمة: ' + shaped.length
       : 'أدخل ارتفاع المساحة أو حدّد جدارًا وأدخل سماكته وارتفاعه.';
+  drawModelFaces($('model3d'), faces, S.selected);
+}
+function drawModelFaces(canvas, faces, selected) {
+  canvas.replaceChildren();
   if (!faces.length) return;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const face of faces) for (const point of face.points) {
@@ -1792,7 +1805,7 @@ function render3d() {
       [360 + (point.x - centerX) * scale, 190 + (point.y - centerY) * scale].join(',')).join(' ');
     const color = C[face.layer];
     canvas.append(el('polygon', { points, fill: color, 'fill-opacity': face.kind === 'top' ? .72 : .92,
-      stroke: face.id === S.selected ? '#d2ab63' : '#233c32', 'stroke-width': face.id === S.selected ? 2 : 1 }));
+      stroke: face.id === selected ? '#d2ab63' : '#233c32', 'stroke-width': face.id === selected ? 2 : 1 }));
   }
 }
 $('toggle3d').onclick = () => {

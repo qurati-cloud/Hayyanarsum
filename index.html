@@ -173,7 +173,7 @@
       <p>يمكنك كتابة كل فراغ في سطر مستقل، مثل «مجلس: ٤٫٥ × ٦ م». للاسم المخصص اكتب «فراغ مخزن الحديقة: ٢ × ٣ م». إذا لم تعرف الأبعاد، اترك ما بعد النقطتين فارغًا وأكمل الحقول بعد الاستخراج. للارتدادات، اكتب كل جهة في سطر مثل «الارتداد الأمامي: ٣ م».</p>
       <details>
         <summary>كتابة موقع الفراغ في الوصف</summary>
-        <p>مثال على سطر كامل: «مجلس: ٤ × ٥ م؛ الموضع: ١ × ٢ م». الموضع هو X من يسار الأرض ثم Y من حد الشارع.</p>
+        <p>مثال على سطر كامل: «مجلس: ٤ × ٥ م؛ الموضع: ١ × ٢ م». الموضع هو X من يسار الأرض ثم Y من حد الشارع. للعرض الثلاثي أضف «؛ الارتفاع: ٢٫٨ م».</p>
       </details>
       <button type="submit" class="primary">استخراج البيانات المذكورة</button>
       <p class="muted">استخراج البيانات والأبعاد يعمل بقواعد محلية. يمكنك معاينة توزيع هندسي أولي من المدخلات أدناه.</p>
@@ -249,6 +249,11 @@
     <p id="briefPlanStatus" role="status"></p>
     <svg id="briefPlanPreview" hidden viewBox="0 0 720 420" role="img" aria-label="حد الأرض وتوزيع الفراغات بالمقياس النسبي"></svg>
     <ul id="briefPlanRooms" aria-label="أسماء الفراغات المرقمة وأبعادها" hidden></ul>
+    <details id="briefModelPanel" hidden>
+      <summary>معاينة الفراغات ثلاثية الأبعاد</summary>
+      <p id="briefModelNote"></p>
+      <svg id="briefModel" viewBox="0 0 720 380" width="720" height="380" role="img" aria-label="مجسمات الفراغات ذات الارتفاعات المحددة"></svg>
+    </details>
   </section>
 </section></main>
 <section id="printSheet"></section><footer><b>هيا نرسم · هندسة تبدأ بفكرة.</b><span>Hayyanarsum · Engineering begins with an idea.</span></footer><script type="module" src="app.js"></script></body></html>

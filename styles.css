@@ -63,3 +63,5 @@ button:disabled{opacity:.55;cursor:default}
 
 #briefLayoutForm{max-width:44rem}
 #briefPlanPreview:not([hidden]){display:block;width:100%;max-width:48rem;height:auto;margin-block-start:1rem}
+
+#briefModel{display:block;width:100%;max-width:48rem;height:auto}

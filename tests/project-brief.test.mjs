@@ -325,3 +325,36 @@ test('conflicting or unreadable positions leave both axes unresolved without cha
   const result = customRoomBlockPlan({ frontage: 12, depth: 15 }, { coordinates: true }, rooms);
   assert.deepEqual(result, { error: 'coordinates', names: ['Kitchen'] });
 });
+
+test('explicit room heights carry from multilingual descriptions into the editable and 3D geometry', async () => {
+  const { extractBriefRooms, cleanBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const { roomProjection, valid } = await import('../engine.js');
+  const rooms = extractBriefRooms([
+    'مجلس: ٤ × ٥ م؛ الموضع: ٠ × ٠ م؛ الارتفاع: ٢٫٨ م',
+    'Kitchen: 3 by 4 m; position: 4 by 0 m; Height: 3 meters',
+    'Espace Atelier: 2 par 3 mètres; position: 8 × 0 m; Hauteur: 2,5 mètres',
+    'حمام: ٢ × ٢ م؛ الموضع: ٠ × ٥ م',
+  ].join('\n'));
+  assert.deepEqual(rooms.map(room => room.z), [2.8, 3, 2.5, undefined]);
+  const saved = JSON.parse(JSON.stringify(cleanBriefRooms(rooms)));
+  const plan = customRoomBlockPlan({ frontage: 12, depth: 15 }, { coordinates: true }, saved);
+  assert.ok(plan.rooms.every(valid));
+  assert.deepEqual(plan.rooms.map(room => room.z), [2.8, 3, 2.5, null]);
+  const solids = plan.rooms.map((room, i) => ({ ...room, id: i }));
+  const faces = roomProjection(solids, 35);
+  assert.deepEqual(faces.filter(face => face.kind === 'top').map(face => face.id).sort(), [0, 1, 2]);
+  assert.notDeepEqual(roomProjection([{ ...solids[0], z: 3 }], 35), roomProjection([solids[0]], 35));
+});
+
+test('conflicting heights and unsupported units leave height unset while retaining the 2D layout', async () => {
+  const { extractBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const rooms = extractBriefRooms([
+    'Kitchen: 3 × 4 m; height: 3 m',
+    'Kitchen: 3 × 4 m; height: 4 m',
+    'Salon: 4 × 4 m; hauteur: 9 ft',
+    'حمام: ٢ × ٢ م؛ الارتفاع: ٠ م',
+  ].join('\n'));
+  assert.deepEqual(rooms.map(({ w, h, z }) => [w, h, z]), [[3, 4, null], [4, 4, null], [2, 2, null]]);
+  const result = customRoomBlockPlan({ frontage: 12, depth: 15 }, { automatic: true }, rooms);
+  assert.deepEqual(result.rooms.map(room => room.z), [null, null, null]);
+});
