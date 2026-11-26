@@ -67,3 +67,5 @@ button:disabled{opacity:.55;cursor:default}
 #briefModel{display:block;width:100%;max-width:48rem;height:auto}
 
 #briefFillPositionsLabel[hidden]{display:none}
+
+.room-edge-status:empty { margin: 0; }

@@ -7,12 +7,12 @@ import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalK
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
 import { cleanSaudiInputs, residentialRoomMetadata, residentialSpaceRules, saudiModelReview, saudiEdgeKinds, saudiNumberFields, saudiProjectReview, saudiSources, saudiTextFields } from './engine.js';
-import{normalizeNumericInput,snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,planView,area,isLinear,wallFromCadLine,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
+import{normalizeNumericInput,snap,nearestCadEndpoint,cleanMeasurements,measureSegment,measurementLimit,planView,area,isLinear,wallFromCadLine,isRoomEdge,wallsFromRoomEdges,slabNetArea,slabOpeningArea,slabVolume,length,totalArea,valid,validHeight,wallFootprint,wallSpans,wallQuantities,roomProjection,groundLevel,validateLevels,elementLevel,compliance,dxf}from'./engine.js';const $=x=>document.getElementById(x),NS='http://www.w3.org/2000/svg',PX=40,C={'CAD-REF':'#47677b','A-WALL':'#0e5a40','S-COLS':'#a8792a','S-SLAB':'#91754a','E-POWR':'#d8831d','M-HVAC':'#3486a7','P-WATR':'#326ad1'};let S={schema:2,levels:[groundLevel],activeLevel:'ground',project:{},shapes:[],measurements:[],prices:{},selected:null,tool:'select'},past=[],next=[],start=null;
 let fitDrawing = false;
 let snapCadEndpoints = false;
 const esc=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])),el=(n,a={})=>{const e=document.createElementNS(NS,n);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e},commit=()=>{past.push(JSON.stringify(S));if(past.length>60)past.shift();next=[];clearCoordination()};
 function dimension(s){const g=$('dims'),t=el('text',{x:(!isLinear(s)?s.x+s.w/2:(s.x+s.x2)/2)*PX,y:(!isLinear(s)?s.y:(s.y+s.y2)/2)*PX-8,'text-anchor':'middle',class:'dim'});t.textContent=(!isLinear(s)?s.w:length(s)).toFixed(2)+' m';g.append(t)}
-function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=!isLinear(s)?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':s.type==='cadLine'?2:6,'vector-effect':s.type==='cadLine'?'non-scaling-stroke':'none',class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(isLinear(s)?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && !isLinear(shape)); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); updateIfcExport();renderLevels(); renderSlabEditor();renderThermalAssignment(); renderEnvelope(); updateDrawingExtent(); renderMeasurements()}
+function render(){const visibleShapes = S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);const g=$('shapes');g.replaceChildren();$('dims').replaceChildren();for(const s of visibleShapes){if(s.type==='slab'){drawSlab(g,s);dimension(s);continue}if(s.type==='wall'&&s.thickness!=null){drawWall(g,s);dimension(s);continue}const e=!isLinear(s)?el('rect',{x:s.x*PX,y:s.y*PX,width:s.w*PX,height:s.h*PX,fill:C[s.layer]+'18',stroke:C[s.layer],'stroke-width':2,class:'shape'+(s.id===S.selected?' selected':'')}):el('line',{x1:s.x*PX,y1:s.y*PX,x2:s.x2*PX,y2:s.y2*PX,stroke:C[s.layer],'stroke-width':s.type==='cadLine'?2:6,'vector-effect':s.type==='cadLine'?'non-scaling-stroke':'none',class:'shape'+(s.id===S.selected?' selected':'')});e.dataset.id=s.id;g.append(e);dimension(s)}$('count').childNodes[0].nodeValue=S.shapes.length;$('area').childNodes[0].nodeValue=totalArea(S.shapes).toFixed(2);$('selected').textContent=S.selected?'عنصر محدد':'لا يوجد تحديد';$('objects').innerHTML=visibleShapes.map(s=>`<div class="object ${s.id===S.selected?'active':''}" data-id="${s.id}"><b>${esc(s.name)}</b><br>${quantityFor(s).toFixed(2)+' '+(isLinear(s)?'م':'م²')}</div>`).join('')||'<p>لا توجد عناصر.</p>';$('layers').innerHTML=Object.keys(C).map(l=>`<div class="layer"><i style="background:${C[l]}"></i>${l} · ${visibleShapes.filter(s=>s.layer===l).length}</div>`).join('');$('editRoom').disabled = !S.shapes.some(shape => shape.id === S.selected && !isLinear(shape)); syncRectangleEditor(); boq(); render3d(); renderWallEditor(); renderRoomEdgeConverter(visibleShapes); updateIfcExport();renderLevels(); renderSlabEditor();renderThermalAssignment(); renderEnvelope(); updateDrawingExtent(); renderMeasurements()}
 const levelShapes = () => S.shapes.filter(shape => elementLevel(shape, S.levels)?.id === S.activeLevel);
 const itemLabel = shape => S.levels.length === 1 ? shape.name : shape.name + ' · ' + elementLevel(shape, S.levels)?.name;
 const quantityFor = shape => isLinear(shape) ? length(shape) : shape.type === 'slab' ? slabNetArea(shape) : area(shape);
@@ -426,6 +426,32 @@ $('cadToWallForm').onsubmit = event => {
     event.target.reset();
   }
 };
+function renderRoomEdgeConverter(visibleShapes) {
+  const count = visibleShapes.filter(isRoomEdge).length;
+  $('roomEdgeConverter').hidden = count === 0;
+  $('roomEdgeCount').textContent = count.toLocaleString('ar-SA');
+  $('roomEdgeStatus').textContent = '';
+}
+
+$('roomEdgeForm').onsubmit = event => {
+  event.preventDefault();
+  const result = wallsFromRoomEdges(S.shapes, S.levels, S.activeLevel, {
+    thickness: numberField('roomEdgeThickness'),
+    z: numberField('roomEdgeHeight'),
+  });
+  if (!result) {
+    $('roomEdgeStatus').textContent = 'تحقق من السماكة والارتفاع وإحداثيات الخطوط المرجعية.';
+    return;
+  }
+  if (!result.count) return;
+  commit();
+  S.shapes = result.shapes;
+  event.target.reset();
+  $('roomEdgeConverter').open = false;
+  render();
+  $('roomEdgeStatus').textContent = 'تم تحويل الخطوط إلى جدران. يمكنك التراجع عن الدفعة بزر التراجع.';
+};
+
 $('openingIndex').onchange = loadOpeningFields;
 $('openingKind').onchange = configureOpeningSill;
 $('openingApply').onclick = () => {

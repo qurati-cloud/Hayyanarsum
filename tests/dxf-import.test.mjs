@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readDxf } from '../dxf-import.js';
-import { dxf, length, nearestCadEndpoint, wallFromCadLine, wallQuantities } from '../engine.js';
+import { dxf, length, nearestCadEndpoint, wallFromCadLine, wallQuantities, wallsFromRoomEdges } from '../engine.js';
 
 const drawing = (entities, unit = '6') => [
   '0', 'SECTION', '2', 'HEADER', ...(unit === '' ? [] : ['9', '$INSUNITS', '70', unit]),
@@ -67,4 +67,41 @@ test('endpoint snapping returns exact imported coordinates only within the confi
   assert.deepEqual(nearestCadEndpoint({ x: 1.15, y: -2.06 }, shapes, .2), { x: 1.137, y: -2.065 });
   assert.deepEqual(nearestCadEndpoint({ x: 2.49, y: -3.99 }, shapes, .05), { x: 2.5, y: -4 });
   assert.equal(nearestCadEndpoint({ x: 1.15, y: -2.06 }, shapes, .005), null);
+});
+
+test('convert only room edge references on the requested floor while preserving coordinates and IDs', () => {
+  const [base] = readDxf(drawing(line, '4')).lines;
+  const levels = [{ id: 'ground' }, { id: 'upper' }];
+  const edge = { ...base, id: 'edge1', cadLayer: 'A-ROOM-EDGE' };
+  const edge2 = { ...edge, id: 'edge2', x2: 3 };
+  const retained = [
+    { ...edge, id: 'upperEdge', levelId: 'upper' },
+    { ...base, id: 'plot', cadLayer: 'SITE-LOT' },
+    { ...base, id: 'setback', cadLayer: 'SITE-LIMIT' },
+    { ...base, id: 'existingWall', type: 'wall' },
+  ];
+  const original = [edge, ...retained, edge2];
+  const options = { thickness: .25, z: 3.2 };
+  const { shapes, count } = wallsFromRoomEdges(original, levels, 'ground', options);
+  assert.equal(count, 2);
+  for (const [index, source] of [edge, edge2].entries()) {
+    const wall = shapes[original.indexOf(source)];
+    assert.deepEqual(wall, wallFromCadLine(source, { ...options, name: 'جدار حدود الفراغ ' + (index + 1) }));
+    assert.equal(source.type, 'cadLine');
+  }
+  retained.forEach((shape, index) => assert.equal(shapes[index + 1], shape));
+  assert.equal(wallsFromRoomEdges(shapes, levels, 'ground', options).count, 0);
+});
+
+test('batch conversion leaves the original drawing untouched when any axis or wall dimension is invalid', () => {
+  const [base] = readDxf(drawing(line, '4')).lines;
+  const levels = [{ id: 'ground' }];
+  const edge = { ...base, id: 'valid', cadLayer: 'A-ROOM-EDGE' };
+  const degenerate = { ...edge, id: 'invalid', x2: edge.x, y2: edge.y };
+  const shapes = [edge, degenerate];
+  const snapshot = structuredClone(shapes);
+  assert.equal(wallsFromRoomEdges(shapes, levels, 'ground', { thickness: .2, z: 3 }), null);
+  assert.equal(wallsFromRoomEdges([edge], levels, 'ground', { thickness: 0, z: 3 }), null);
+  assert.equal(wallsFromRoomEdges([edge], levels, 'ground', { thickness: .2 }), null);
+  assert.deepEqual(shapes, snapshot);
 });

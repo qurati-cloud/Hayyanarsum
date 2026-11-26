@@ -263,6 +263,19 @@ export function wallFromCadLine(line, { name, thickness, z }) {
   return { id, levelId, x, y, x2, y2, type: 'wall', layer: 'A-WALL', name, thickness, z, openings: [] };
 }
 
+export const isRoomEdge = shape => shape.type === 'cadLine' && shape.cadLayer === 'A-ROOM-EDGE';
+
+export function wallsFromRoomEdges(shapes, levels, levelId, dimensions) {
+  const walls = new Map();
+  for (const shape of shapes) {
+    if (!isRoomEdge(shape) || elementLevel(shape, levels)?.id !== levelId) continue;
+    const wall = wallFromCadLine(shape, { ...dimensions, name: 'جدار حدود الفراغ ' + (walls.size + 1) });
+    if (!wall) return null;
+    walls.set(shape, wall);
+  }
+  return { shapes: shapes.map(shape => walls.get(shape) ?? shape), count: walls.size };
+}
+
 export const residentialReference = Object.freeze({
   authority: 'وزارة البلديات والإسكان',
   title: 'اشتراطات إنشاء المباني السكنية',

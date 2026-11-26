@@ -16,6 +16,19 @@
   <button id="levelRemove">حذف الطابق الفارغ</button>
   <p id="levelStatus" role="status"></p>
 </details>
+<details id="roomEdgeConverter" class="storeys panel" hidden>
+  <summary>تحويل حدود الفراغات إلى جدران</summary>
+  <p>خطوط حدود الفراغات في الطابق النشط: <b id="roomEdgeCount">٠</b>. يصبح كل خط محورًا لجدار بالسماكة والارتفاع اللذين تدخلهما.</p>
+  <form id="roomEdgeForm">
+    <div class="level-fields">
+      <label>السماكة (م)<input id="roomEdgeThickness" type="text" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any" required></label>
+      <label>الارتفاع (م)<input id="roomEdgeHeight" type="text" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any" required></label>
+    </div>
+    <button type="submit" class="primary">تحويل خطوط هذا الطابق</button>
+  </form>
+  <p>راجع مواضع المحاور وسماكاتها وتقاطعاتها، وأضف الأبواب والنوافذ حسب المخطط.</p>
+</details>
+<p id="roomEdgeStatus" class="room-edge-status" role="status"></p>
 <div class="work">
 <aside><h2>أدوات الرسم</h2><div class="tools"><button data-tool="select" class="active">⌖<small>تحديد</small></button><button data-tool="room">▭<small>مساحة</small></button><button data-tool="wall">╱<small>جدار</small></button><button data-tool="slab">▰<small>بلاطة</small></button><button data-tool="measure">↔<small>قياس</small></button></div><h3>خصائص العنصر</h3><label>الاسم<input id="shapeName" value="مساحة جديدة"></label><div class="two" id="shapeSize"><label>العرض (م)<input id="shapeW" type="text" data-number inputmode="decimal" data-min=".01" data-step="any" value="4"></label><label>الطول (م)<input id="shapeH" type="text" data-number inputmode="decimal" data-min=".01" data-step="any" value="5"></label></div><label id="roomHeightGroup">ارتفاع المساحة للعرض الثلاثي (م، اختياري)<input id="roomZ" type="text" data-number inputmode="decimal" data-min="0.01" data-max="1000" data-step="any" placeholder="أدخل الارتفاع"></label><fieldset id="roomReviewFields" class="review-fields"><legend>استخدام الفراغ للمراجعة السعودية</legend><label>الاستخدام السكني<select id="roomUse"><option value="">غير محدد</option></select></label><label class="clear-room"><input id="roomClear" type="checkbox">الأبعاد المدخلة صافية بعد التشطيب</label></fieldset><div id="slabFields" hidden><label>سماكة البلاطة (م)<input id="slabThickness" type="text" data-number inputmode="decimal" data-min="0.01" data-step="any"></label><div class="two"><label>بداية البلاطة X<input id="slabX" type="text" data-number inputmode="decimal" data-step="any" value="2"></label><label>بداية البلاطة Y<input id="slabY" type="text" data-number inputmode="decimal" data-step="any" value="2"></label></div><p class="notice">الوجه العلوي للبلاطة عند منسوب الطابق.</p></div><section id="slabCutPanel" hidden>
   <h3>فتحات البلاطة</h3>
