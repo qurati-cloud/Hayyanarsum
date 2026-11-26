@@ -14,17 +14,38 @@ function hasLocalCity(description) {
   return Boolean(data.city) || conflicts.includes('city');
 }
 
+export function briefCitySource(description, city) {
+  if (typeof city !== 'string' || !cityName.test(city)) return null;
+  const locationPhrases = [
+    String.raw`(?:فيلا|ڤيلا|منزل|بيت|عمارة سكنية|المشروع)(?:[ \t]+يقع)?[ \t]+في(?:[ \t]+مدينة)?`,
+    String.raw`(?:house|home|villa|apartment building|project)(?:[ \t]+(?:is[ \t]+)?located)?[ \t]+in(?:[ \t]+the city of)?`,
+    String.raw`(?:maison|villa|immeuble résidentiel|projet)(?:[ \t]+située?)?[ \t]+à`,
+  ];
+  const marker = new RegExp(String.raw`(?<![\p{L}\p{M}\p{N}])(?:${locationPhrases.join('|')})[ \t]+`, 'giu');
+  const endOfCity = /^(?:[ \t]*(?:$|[.!?؟,،;؛])|[ \t]+(?:with|avec|من[ \t]+(?:طابق(?:ين)?|دور(?:ين)?)|بمساحة|يتكون|تتكون)(?![\p{L}\p{M}]))/iu;
+  const alternative = /^[ \t,،;؛]*(?:أو|او|or|ou|and|et|\/)(?![\p{L}\p{M}])/iu;
+  const negative = /(?:ليس|ليست|خارج|غير|\bnot\b|\bno\b|\bpas\b|\bhors\b)/iu;
+  if (/[ \t](?:أو|او|or|ou|and|et|with|avec|من[ \t]+(?:طابق|دور))(?:[ \t]|$)/iu.test(city)) return null;
+  let clue;
+  for (const line of description.split(/\r?\n/u)) {
+    for (const match of line.matchAll(marker)) {
+      const start = match.index + match[0].length;
+      const tail = line.slice(start);
+      const suffix = tail.slice(city.length);
+      const prefix = line.slice(0, match.index).split(/[.!?؟;؛]/u).at(-1);
+      if (!tail.startsWith(city) || !endOfCity.test(suffix) || alternative.test(suffix) || negative.test(prefix)) return null;
+      clue ??= match[0] + city;
+    }
+  }
+  return clue ?? null;
+}
+
 export function groundedCity(description, candidate) {
   if (hasLocalCity(description)) return null;
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) ||
       Object.keys(candidate).length !== 1 || typeof candidate.city !== 'string') return null;
   const city = candidate.city.trim();
-  if (!cityName.test(city)) return null;
-  for (const match of description.matchAll(/(?<![\p{L}\p{M}\p{N}])([\s\S])/gu)) {
-    const start = match.index;
-    if (description.startsWith(city, start) && !/^[\p{L}\p{M}\p{N}]/u.test(description.slice(start + city.length))) return city;
-  }
-  return null;
+  return briefCitySource(description, city) ? city : null;
 }
 
 const ollamaOrigin = 'http://127.0.0.1:11434';

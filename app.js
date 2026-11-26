@@ -1308,8 +1308,9 @@ aiCityButton.onclick = async () => {
       throw new Error('AI unavailable');
     }
     citySuggestion = result.city;
-    aiCityStatus.textContent = citySuggestion ? 'المدينة المقترحة للمراجعة: ' + citySuggestion :
-      'لم يتوفر اقتراح موثّق من نص الوصف. اكتب المدينة في الحقل أدناه.';
+    aiCityStatus.textContent = citySuggestion
+      ? 'المدينة المقترحة للمراجعة: ' + citySuggestion + (result.source ? ' · من الوصف: «' + result.source + '»' : '')
+      : 'تعذّر ربط اقتراح المدينة بعبارة واضحة عن موقع المشروع. يمكنك كتابة المدينة في الحقل أدناه.';
     aiCityApply.hidden = !citySuggestion;
   } catch {
     if (cityRequest === controller) aiCityStatus.textContent =

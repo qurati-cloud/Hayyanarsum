@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { groundedCity, LocalBriefModelMissing, suggestBriefCity } from '../brief-ai.mjs';
+import { briefCitySource, groundedCity, LocalBriefModelMissing, suggestBriefCity } from '../brief-ai.mjs';
 
 test('only an explicit city span survives as a suggestion, without dimensions or overrides', () => {
   for (const [description, city] of [
@@ -73,4 +73,25 @@ test('never sends the project description when the configured model is absent or
     /Invalid Ollama model list/);
   await assert.rejects(suggestBriefCity(description, 'test-model', async () => new Response('', { status: 503 })),
     /Ollama unavailable/);
+});
+
+test('links AI suggestions to exact project location phrases in Arabic, English and French', () => {
+  for (const [description, city, evidence] of [
+    ['أريد فيلا في مدينة حائل من طابقين.', 'حائل', 'فيلا في مدينة حائل'],
+    ['A house located in Al Ula with a courtyard.', 'Al Ula', 'house located in Al Ula'],
+    ['Une maison située à Tabouk avec deux chambres.', 'Tabouk', 'maison située à Tabouk'],
+  ]) {
+    assert.equal(briefCitySource(description, city), evidence);
+    assert.equal(groundedCity(description, { city }), city);
+  }
+  for (const [description, city] of [
+    ['Our builder works in Tabouk. The house has two bedrooms.', 'Tabouk'],
+    ['A house in Al Ula with a courtyard.', 'Al Ula with a courtyard'],
+    ['A house in Al Ula Heights with two bedrooms.', 'Al Ula'],
+    ['A house in Al Ula, or Tabouk.', 'Al Ula'],
+    ['A house in Al Ula or Tabouk.', 'Al Ula or Tabouk'],
+    ['A house in Al Ula. Maison à Tabouk.', 'Tabouk'],
+    ['ليست فيلا في حائل.', 'حائل'],
+    ['A house in Al Ula with two bedrooms.', 'Al'],
+  ]) assert.equal(groundedCity(description, { city }), null, description);
 });
