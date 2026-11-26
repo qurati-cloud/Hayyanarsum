@@ -654,14 +654,17 @@ function planTitle() {
 
 $('exportSVG').onclick = () =>
   dl('hayyanarsum-plan.svg', new XMLSerializer().serializeToString(annotatedPlan()), 'image/svg+xml');
-$('printPlan').onclick = () => {
+function printDrawing(title, caption, ...content) {
   const heading = document.createElement('h1');
-  heading.textContent = planTitle();
+  heading.textContent = title;
   const note = document.createElement('p');
-  note.textContent = 'مخطط الطابق للمراجعة. القيم بالمتر، ومقياس الطباعة يتبع حجم الورق.';
-  $('printSheet').replaceChildren(heading, note, annotatedPlan());
+  note.textContent = caption;
+  $('printSheet').replaceChildren(heading, note, ...content);
   window.print();
-};
+}
+
+$('printPlan').onclick = () => printDrawing(planTitle(),
+  'مخطط الطابق للمراجعة. القيم بالمتر، ومقياس الطباعة يتبع حجم الورق.', annotatedPlan());
 window.addEventListener('afterprint', () => $('printSheet').replaceChildren());
 
 $('measurementForm').onsubmit = event => {
@@ -1513,6 +1516,7 @@ function clearBriefPlan() {
   $('exportBriefDxf').disabled = true;
   $('exportBriefIfc').disabled = true;
   $('exportBriefSchedule').disabled = true;
+  $('printBriefPlan').disabled = true;
   $('refineBriefPositions').hidden = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
@@ -1833,6 +1837,7 @@ $('briefLayoutForm').onsubmit = event => {
   $('exportBriefDxf').disabled = false;
   $('exportBriefIfc').disabled = !briefPlan.rooms.some(isIfcSpace);
   $('exportBriefSchedule').disabled = false;
+  $('printBriefPlan').disabled = false;
   if (plan.suggestedIndices?.length) {
     $('refineBriefPositions').textContent = 'انقل الإحداثيات المقترحة للتعديل';
     $('refineBriefPositions').hidden = false;
@@ -1887,6 +1892,27 @@ $('exportBriefDxf').onclick = () => {
     $('briefPlanStatus').textContent = 'تعذّر تصدير المعاينة. راجع الأبعاد وأعد المعاينة.';
   }
 };
+$('printBriefPlan').onclick = () => {
+  if (!briefPlan) return;
+  if (!briefFloorMatches(briefPlan)) {
+    clearBriefPlan();
+    $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة قبل الطباعة.';
+    return;
+  }
+  const drawing = $('briefPlanPreview').cloneNode(true);
+  drawing.removeAttribute('id');
+  drawing.classList.add('brief-print-drawing');
+  const legend = $('briefPlanRooms').cloneNode(true);
+  legend.removeAttribute('id');
+  legend.classList.add('brief-print-rooms');
+  const { frontage, depth, envelope, existingRooms, wallReview } = briefPlan;
+  const caption = 'معاينة للمراجعة بمقياس نسبي · الأرض ' + thermalLabel(frontage) + ' × ' + thermalLabel(depth) + ' م.' +
+    (envelope ? ' تظهر حدود الارتدادات المدخلة بخط متقطع.' : '') +
+    (existingRooms.length ? ' الفراغات القائمة بالرمادي.' : '') +
+    (wallReview.overlaps.size ? ' الذهبي يشير إلى التداخل مع المسقط الكامل لجدار قائم.' : '');
+  printDrawing('معاينة التوزيع · ' + planTitle(), caption, drawing, legend);
+};
+
 $('exportBriefSchedule').onclick = () => {
   if (!briefPlan) return;
   const { name: level, elevation } = briefPlan.level;

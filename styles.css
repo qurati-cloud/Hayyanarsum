@@ -59,6 +59,9 @@ button:disabled{opacity:.55;cursor:default}
   #printSheet h1{font-size:16pt;margin:0 0 2mm}
   #printSheet p{font-size:9pt;margin:0 0 4mm}
   #printSheet svg{display:block;width:100%;height:auto;max-height:154mm}
+  #printSheet .brief-print-drawing{max-height:125mm}
+  #printSheet .brief-print-rooms{columns:2;column-gap:8mm;margin-block:3mm;font-size:9pt;padding-inline-start:5mm}
+  #printSheet .brief-print-rooms li{break-inside:avoid;margin-block-end:1mm;overflow-wrap:anywhere}
 }
 
 #briefLayoutForm{max-width:44rem}
