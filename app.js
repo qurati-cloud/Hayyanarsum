@@ -1273,6 +1273,7 @@ function clearCitySuggestion() {
 
 $('briefDescription').oninput = () => {
   clearCitySuggestion();
+  renderBriefEvidence();
   clearBriefPlan();
 };
 
@@ -1334,8 +1335,31 @@ function renderBriefQuestions() {
     return item;
   }));
 }
+function renderBriefEvidence(evidence = {}) {
+  const labels = { kind: 'نوع المبنى', city: 'المدينة', frontage: 'عرض الأرض',
+    depth: 'عمق الأرض', storeys: 'عدد الطوابق', bedrooms: 'عدد غرف النوم' };
+  const list = $('briefEvidenceList');
+  list.replaceChildren();
+  $('briefEvidence').hidden = Object.keys(evidence).length === 0;
+  for (const key of Object.keys(briefFields)) {
+    for (const { value, line, text } of evidence[key] ?? []) {
+      const label = typeof value === 'number'
+        ? thermalLabel(value) + (key === 'frontage' || key === 'depth' ? ' م' : '')
+        : key === 'kind' ? Array.from(briefField(key).options).find(option => option.value === value)?.text ?? value
+          : value;
+      const item = document.createElement('li');
+      item.textContent = labels[key] + ' · ' + label + ' · السطر ' + thermalLabel(line) + ' ';
+      const quote = document.createElement('bdi');
+      quote.textContent = '«' + text + '»';
+      item.append(quote);
+      list.append(item);
+    }
+  }
+}
+
 function loadBriefForm() {
   clearCitySuggestion();
+  renderBriefEvidence();
   const saved = S.project.brief ?? {};
   $('briefFillPositions').checked = false;
   $('briefUseRoomEdges').checked = false;
@@ -1371,7 +1395,8 @@ $('briefExtractForm').onsubmit = event => {
   event.preventDefault();
   clearCitySuggestion();
   const description = $('briefDescription').value;
-  const { data, conflicts } = extractBrief(description);
+  const { data, conflicts, evidence } = extractBrief(description, { includeEvidence: true });
+  renderBriefEvidence(evidence);
   const rooms = extractBriefRooms(description);
   const containsPositions = rooms.some(room => Object.hasOwn(room, 'x'));
   const { setbacks, conflicts: disputedSetbacks, invalid } = extractBriefSetbacks(description);

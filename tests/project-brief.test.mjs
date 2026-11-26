@@ -526,3 +526,30 @@ test('room dimensions, positions, heights and setbacks convert without imputing 
   const [conflicted] = extractBriefRooms('Kitchen: 3 × 4 m; height: 250 cm\nKitchen: 301 × 400 cm; height: 2501 mm');
   assert.deepEqual([conflicted.w, conflicted.h, conflicted.z], [null, null, null]);
 });
+
+test('project field evidence keeps original text and line numbers for equivalent and conflicting values', () => {
+  const description = '\n\r\n  فيلا في الرياض من طابقين\r\n\r\n' +
+    'أبعاد الأرض: ٢٠٠٠ سم × ٣٠ م\r\n' +
+    'Frontage: 21 m\r\nFloor count: two\r\nNombre de chambres : QUATRE';
+  const { data, conflicts, evidence } = extractBrief(description, { includeEvidence: true });
+  assert.deepEqual(data, { kind: 'villa', city: 'الرياض', depth: 30, storeys: 2, bedrooms: 4 });
+  assert.deepEqual(conflicts, ['frontage']);
+  assert.deepEqual(evidence.frontage, [
+    { value: 20, line: 5, text: 'أبعاد الأرض: ٢٠٠٠ سم × ٣٠ م' },
+    { value: 21, line: 6, text: 'Frontage: 21 m' },
+  ]);
+  assert.equal(evidence.depth[0].text, 'أبعاد الأرض: ٢٠٠٠ سم × ٣٠ م');
+  assert.equal(evidence.kind[0].line, 3);
+  assert.equal(evidence.city[0].line, 3);
+  assert.equal(evidence.storeys.length, 1);
+  assert.equal(evidence.bedrooms[0].text, 'Nombre de chambres : QUATRE');
+  assert.deepEqual(extractBrief(description), { data, conflicts });
+});
+
+test('evidence includes both original lines for a measurement split across lines and omits unsupported units', () => {
+  const description = 'Frontage:\n  2000 cm.\nDepth: 50 ft';
+  assert.deepEqual(extractBrief(description, { includeEvidence: true }), {
+    data: { frontage: 20 }, conflicts: [],
+    evidence: { frontage: [{ value: 20, line: 1, text: 'Frontage:\n  2000 cm.' }] },
+  });
+});

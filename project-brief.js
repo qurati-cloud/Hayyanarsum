@@ -77,24 +77,44 @@ const countLabels = {
 };
 const countValue = raw => Object.hasOwn(words, raw) ? words[raw] : /^\d+$/u.test(raw) ? Number(raw) : NaN;
 
-export function extractBrief(description) {
-  const source = normalizeNumericInput(description.slice(0, 4000).normalize('NFKC').toLowerCase()).replace(/[\u064B-\u065F\u0670]/gu, '');
+export function extractBrief(description, { includeEvidence = false } = {}) {
+  const raw = description.slice(0, 4000);
+  const original = raw.trimStart();
+  const source = normalizeNumericInput(original.normalize('NFKC').toLowerCase()).replace(/[\u064B-\u065F\u0670]/gu, '');
   const candidates = Object.fromEntries(Object.keys(briefFields).map(key => [key, new Set()]));
-  const add = (key, value) => {
+  const lines = includeEvidence ? original.split('\n') : [];
+  const lineOffset = includeEvidence ? raw.slice(0, raw.length - original.length).split('\n').length - 1 : 0;
+  const evidence = {};
+  const add = (key, value, match) => {
     const clean = cleanBrief({ [key]: value });
-    if (Object.hasOwn(clean, key)) candidates[key].add(clean[key]);
+    if (!Object.hasOwn(clean, key) || candidates[key].has(clean[key])) return;
+    candidates[key].add(clean[key]);
+    if (includeEvidence) {
+      const start = match.index + match[0].search(/\S/u);
+      const end = match.index + match[0].trimEnd().length;
+      const firstLine = source.slice(0, start).split('\n').length;
+      const lastLine = source.slice(0, end).split('\n').length;
+      const text = lines.slice(firstLine - 1, lastLine).join('\n').trim();
+      (evidence[key] ??= []).push({ value: clean[key], line: firstLine + lineOffset, text });
+    }
   };
-  for (const [kind, pattern] of Object.entries(buildingPatterns)) if (pattern.test(source)) add('kind', kind);
-  for (const [city, pattern] of Object.entries(cityNames)) if (pattern.test(source)) add('city', city);
+  for (const [kind, pattern] of Object.entries(buildingPatterns)) {
+    const match = pattern.exec(source);
+    if (match) add('kind', kind, match);
+  }
+  for (const [city, pattern] of Object.entries(cityNames)) {
+    const match = pattern.exec(source);
+    if (match) add('city', city, match);
+  }
   for (const [key, label] of Object.entries(axisDimensions)) {
     const explicit = new RegExp(String.raw`${label}\s*[:=]?\s*${metricLength}`, 'gu');
-    for (const [, value, unit] of source.matchAll(explicit)) add(key, metres(value, unit));
+    for (const match of source.matchAll(explicit)) add(key, metres(match[1], match[2]), match);
   }
   for (const match of source.matchAll(plotPair)) {
     const [frontage, depth] = metresPair(match);
     if ([frontage, depth].every(Number.isFinite)) {
-      add('frontage', frontage);
-      add('depth', depth);
+      add('frontage', frontage, match);
+      add('depth', depth, match);
     }
   }
   for (const [key, term] of Object.entries(countTerms)) {
@@ -102,20 +122,23 @@ export function extractBrief(description) {
     for (const match of source.matchAll(inline)) {
       const prefix = source.slice(Math.max(0, match.index - 30), match.index);
       if (/\d[ \t]*(?:[-–—]|to|or|à|ou|إلى|أو)[ \t]*$/u.test(prefix)) continue;
-      add(key, countValue(match[1]));
+      add(key, countValue(match[1]), match);
     }
     const labeled = new RegExp(String.raw`^\s*${countLabels[key].source}\s*:\s*(\d+|[\p{L}]+)\.?\s*$`, 'gmu');
-    for (const match of source.matchAll(labeled)) add(key, countValue(match[1]));
+    for (const match of source.matchAll(labeled)) add(key, countValue(match[1]), match);
   }
-  if (/(?:^|[^\p{L}])(?:طابقان|طابقين|دوران|دورين)(?![\p{L}])/u.test(source)) add('storeys', 2);
-  if (/(?:^|[^\p{L}])(?:غرفتا نوم|غرفتي نوم)(?![\p{L}])/u.test(source)) add('bedrooms', 2);
+  const dualStoreys = /(?:^|[^\p{L}])(?:طابقان|طابقين|دوران|دورين)(?![\p{L}])/u.exec(source);
+  const dualBedrooms = /(?:^|[^\p{L}])(?:غرفتا نوم|غرفتي نوم)(?![\p{L}])/u.exec(source);
+  if (dualStoreys) add('storeys', 2, dualStoreys);
+  if (dualBedrooms) add('bedrooms', 2, dualBedrooms);
 
   const data = {}, conflicts = [];
   for (const [key, options] of Object.entries(candidates)) {
     if (options.size === 1) data[key] = [...options][0];
     else if (options.size > 1) conflicts.push(key);
   }
-  return { data, conflicts };
+  if (includeEvidence) for (const entries of Object.values(evidence)) entries.sort((a, b) => a.line - b.line);
+  return { data, conflicts, ...(includeEvidence ? { evidence } : {}) };
 }
 
 export function missingBriefFields(data) {

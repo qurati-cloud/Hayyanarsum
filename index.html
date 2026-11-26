@@ -206,6 +206,11 @@
       <div class="two"><label>عدد الطوابق<input name="storeys" type="text" data-number inputmode="numeric" data-min="1" data-max="100" data-step="1"></label>
         <label>عدد غرف النوم<input name="bedrooms" type="text" data-number inputmode="numeric" data-min="0" data-max="100" data-step="1"></label></div>
       <ul id="briefQuestions" aria-label="البيانات المطلوبة"></ul>
+      <details id="briefEvidence" class="review-fields" hidden>
+        <summary>مصدر القيم في الوصف</summary>
+        <p>يعرض هذا القسم القيم التي قرأها التطبيق من وصف المشروع، بما فيها القياسات المتعارضة قبل المراجعة اليدوية.</p>
+        <ul id="briefEvidenceList"></ul>
+      </details>
       <button type="submit" class="primary">حفظ مسودة الوصف محليًا</button>
       <p id="briefStatus" role="status"></p>
     </form>
