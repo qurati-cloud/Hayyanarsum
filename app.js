@@ -1336,6 +1336,7 @@ function readBriefFields() {
 }
 function renderBriefQuestions() {
   const data = readBriefFields();
+  $('briefCityToReview').disabled = !data.city;
   $('briefQuestions').replaceChildren(...missingBriefFields(data).map(key => {
     const item = document.createElement('li');
     item.textContent = (briefConflicts.includes(key) ? 'ذُكرت قيم مختلفة. ' : '') + briefFields[key].question;
@@ -1466,6 +1467,20 @@ briefReview.oninput = event => {
   $('briefStatus').textContent = '';
   clearBriefPlan();
   renderBriefQuestions();
+};
+$('briefCityToReview').onclick = () => {
+  const { city } = readBriefFields();
+  if (!city) return;
+  const target = $('siteCity');
+  const current = target.value.trim();
+  if (current && current.normalize('NFC').toLowerCase() !== city.normalize('NFC').toLowerCase()) {
+    $('briefStatus').textContent = 'توجد مدينة مختلفة في نموذج التحقق السعودي. راجع المدينة هناك قبل تغييرها.';
+    return;
+  }
+  if (!current) target.value = city;
+  document.querySelector('[data-view="compliance"]').click();
+  $('reviewSaved').textContent = 'راجع مدينة المشروع وأكمل بقية بيانات الموقع قبل الحفظ.';
+  target.focus();
 };
 briefReview.onsubmit = event => {
   event.preventDefault();
