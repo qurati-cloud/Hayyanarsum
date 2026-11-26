@@ -358,3 +358,18 @@ test('conflicting heights and unsupported units leave height unset while retaini
   const result = customRoomBlockPlan({ frontage: 12, depth: 15 }, { automatic: true }, rooms);
   assert.deepEqual(result.rooms.map(room => room.z), [null, null, null]);
 });
+
+test('the room schedule preserves preview order and metric quantities, leaving undefined heights and volumes blank', async () => {
+  const { briefRoomSchedule, customRoomBlockPlan } = await import('../project-brief.js');
+  const plan = customRoomBlockPlan({ frontage: 10, depth: 12 }, { coordinates: true }, [
+    { name: 'مجلس', roomUse: 'living', x: 1, y: 2.25, w: 3.5, h: 4, z: 2.75 },
+    { name: 'مطبخ', roomUse: 'kitchen', x: 5, y: 2.25, w: 2.5, h: 2.25 },
+  ]);
+  assert.deepEqual(briefRoomSchedule(plan), [
+    { number: 1, name: 'مجلس', roomUse: 'living', x: 1, y: 2.25,
+      width: 3.5, depth: 4, height: 2.75, areaM2: 14, volumeM3: 38.5 },
+    { number: 2, name: 'مطبخ', roomUse: 'kitchen', x: 5, y: 2.25,
+      width: 2.5, depth: 2.25, height: null, areaM2: 5.625, volumeM3: null },
+  ]);
+  assert.equal(plan.rooms[1].z, null);
+});

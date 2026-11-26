@@ -1,4 +1,4 @@
-import { dxf, normalizeNumericInput, residentialRoomMetadata, validHeight } from './engine.js';
+import { area, dxf, normalizeNumericInput, residentialRoomMetadata, validHeight } from './engine.js';
 
 export const briefFields = {
   kind: { question: 'ما نوع المبنى السكني؟' },
@@ -259,6 +259,16 @@ export function customRoomBlockPlan(brief, layout, rooms) {
 export function briefPreviewDxf(plan) {
   const outlines = plan.rooms.map(room => ({ ...room, layer: 'A-ROOM' }));
   return dxf([...plan.references, ...outlines]);
+}
+
+export function briefRoomSchedule(plan) {
+  return plan.rooms.map((room, index) => {
+    const areaM2 = area(room);
+    const height = validHeight(room.z) ? room.z : null;
+    return { number: index + 1, name: room.name, roomUse: room.roomUse,
+      x: room.x, y: room.y, width: room.w, depth: room.h, height,
+      areaM2, volumeM3: height === null ? null : areaM2 * height };
+  });
 }
 
 const roomLabels = {

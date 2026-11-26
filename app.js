@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomSchedule, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1389,6 +1389,7 @@ function clearBriefPlan() {
   $('insertBriefPlan').disabled = true;
   $('exportBriefDxf').disabled = true;
   $('exportBriefIfc').disabled = true;
+  $('exportBriefSchedule').disabled = true;
   $('refineBriefPositions').hidden = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
@@ -1622,6 +1623,7 @@ $('briefLayoutForm').onsubmit = event => {
   $('insertBriefPlan').disabled = !empty;
   $('exportBriefDxf').disabled = false;
   $('exportBriefIfc').disabled = !briefPlan.rooms.some(isIfcSpace);
+  $('exportBriefSchedule').disabled = false;
   if ($('briefLayoutMode').value === 'custom' && !layout.coordinates) {
     const refine = $('refineBriefPositions');
     const existing = Array.from($('briefRoomList').querySelectorAll('[data-room-placement] input'))
@@ -1630,7 +1632,8 @@ $('briefLayoutForm').onsubmit = event => {
     refine.hidden = false;
   }
   status.textContent = 'الأرض ' + thermalLabel(plan.frontage) + ' × ' + thermalLabel(plan.depth) + ' م · ' +
-    thermalLabel(plan.rooms.length) + ' فراغات. ' +
+    thermalLabel(plan.rooms.length) + ' فراغات · مجموع مساحة الفراغات ' +
+    thermalLabel(totalArea(plan.rooms)) + ' م². ' +
     (layout.automatic ? 'الحد الأقصى للفراغات في الصف المقترح ' + thermalLabel(plan.columns) + '. ' : '') +
     (plan.envelope ? 'المساحة داخل الحدود المرجعية ' +
       thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
@@ -1663,6 +1666,19 @@ $('exportBriefDxf').onclick = () => {
   } catch {
     $('briefPlanStatus').textContent = 'تعذّر تصدير المعاينة. راجع الأبعاد وأعد المعاينة.';
   }
+};
+$('exportBriefSchedule').onclick = () => {
+  if (!briefPlan) return;
+  const { name: level, elevation } = briefPlan.level;
+  const rows = [
+    ['رقم المعاينة', 'الفراغ', 'الاستخدام', 'الطابق', 'المنسوب (م)', 'X (م)', 'Y (م)',
+      'العرض (م)', 'العمق (م)', 'الارتفاع (م)', 'المساحة الهندسية (م²)', 'الحجم الهندسي (م³)'],
+    ...briefRoomSchedule(briefPlan).map(room => [room.number, room.name,
+      residentialSpaceRules[room.roomUse]?.label ?? '', level, elevation, room.x, room.y,
+      room.width, room.depth, room.height ?? '', room.areaM2, room.volumeM3 ?? '']),
+  ];
+  dl('hayyanarsum-layout-preview-rooms.csv',
+    '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
 };
 $('exportBriefIfc').onclick = () => {
   if (!briefPlan) return;
