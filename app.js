@@ -691,14 +691,18 @@ function clearCoordination() {
   $('coordinationStatus').textContent = 'تغيّرت بيانات المشروع. أعد الفحص لتحديث النتائج.';
 }
 
+function selectDrawingShape(shape) {
+  S.activeLevel = elementLevel(shape, S.levels).id;
+  document.querySelector('[data-tool="select"]').click();
+  selectShape(shape.id);
+}
+
 function coordinationSelection(cell, shape) {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = itemLabel(shape);
   button.onclick = () => {
-    S.activeLevel = elementLevel(shape, S.levels).id;
-    document.querySelector('[data-tool="select"]').click();
-    selectShape(shape.id);
+    selectDrawingShape(shape);
     $('activeLevel').focus();
   };
   cell.append(button);
@@ -1526,6 +1530,13 @@ function drawBriefPreview(plan) {
     const item = document.createElement('li');
     item.textContent = thermalLabel(index + 1) + ' · ' + plan.rooms[index].name +
       ' · ' + (wall.name || 'جدار') + ' · ' + thermalLabel(area) + ' م²';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'حدّد الجدار في الرسم';
+    button.setAttribute('aria-label', 'حدّد الجدار «' + (wall.name || 'جدار') +
+      '» المتداخل مع «' + plan.rooms[index].name + '» في الرسم');
+    button.onclick = () => openBriefReviewWall(plan, wall);
+    item.append(' ', button);
     return item;
   }));
   $('briefWallReview').hidden = !examined && !omitted;
@@ -1544,6 +1555,20 @@ function briefFloorMatches(plan) {
   const level = S.levels.find(item => item.id === S.activeLevel);
   return level?.id === plan.levelId && level.name === plan.level.name &&
     level.elevation === plan.level.elevation && plan.floorSnapshot === JSON.stringify(briefFloorContents());
+}
+
+function openBriefReviewWall(plan, wall) {
+  if (plan !== briefPlan || !briefFloorMatches(plan)) {
+    clearBriefPlan();
+    const status = $('briefPlanStatus');
+    status.textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة لتحديد الجدار.';
+    status.focus();
+    return;
+  }
+  fitDrawing = true;
+  document.querySelector('[data-view="workspace"]').click();
+  selectDrawingShape(wall);
+  $('wallEditor').focus();
 }
 
 function updateBriefInsertButton() {

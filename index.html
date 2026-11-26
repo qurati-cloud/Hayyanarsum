@@ -41,7 +41,7 @@
   <button id="slabCutSave" class="primary">حفظ فتحة البلاطة</button>
   <button id="slabCutDelete" class="danger">حذف فتحة البلاطة المحددة</button>
   <p id="slabCutStatus" role="status"></p>
-</section><label id="shapeLayerGroup">الطبقة<select id="layer"><option>A-WALL</option><option>S-COLS</option><option>S-SLAB</option><option>E-POWR</option><option>M-HVAC</option><option>P-WATR</option></select></label><button id="insert" class="primary">إدراج بالأبعاد</button><button id="editRoom" class="primary" disabled>تحديث المساحة المحددة</button><button id="remove" class="danger">حذف المحدد</button><p class="notice">نموذج أولي قابل للقياس والتصدير، وليس مخطط تنفيذ أو شهادة سلامة.</p><section id="wallEditor" class="wall-editor" hidden>
+</section><label id="shapeLayerGroup">الطبقة<select id="layer"><option>A-WALL</option><option>S-COLS</option><option>S-SLAB</option><option>E-POWR</option><option>M-HVAC</option><option>P-WATR</option></select></label><button id="insert" class="primary">إدراج بالأبعاد</button><button id="editRoom" class="primary" disabled>تحديث المساحة المحددة</button><button id="remove" class="danger">حذف المحدد</button><p class="notice">نموذج أولي قابل للقياس والتصدير، وليس مخطط تنفيذ أو شهادة سلامة.</p><section id="wallEditor" tabindex="-1" class="wall-editor" hidden>
   <h3 id="linearTitle">الجدار المحدد</h3>
   <p id="cadSourceLayer" hidden></p>
   <p>الإحداثيات بالمتر. يبدأ قياس موضع الفتحة من النقطة الأولى.</p>
@@ -271,7 +271,7 @@
       <p>تُستخدم إحداثيات الطابق الحالي بالمتر. تبقى العناصر والقياسات محفوظة، وتبقى خطوط الأرض والارتدادات وحدود الفراغات المقترحة في المعاينة. راجع مواضع الجدران والبلاطات في مساحة العمل.</p>
     </div>
     <button id="insertBriefPlan" type="button" disabled>إضافة التوزيع إلى طابق الرسم</button>
-    <p id="briefPlanStatus" role="status"></p>
+    <p id="briefPlanStatus" tabindex="-1" role="status"></p>
     <svg id="briefPlanPreview" hidden viewBox="0 0 720 420" role="img" aria-label="حد الأرض وتوزيع الفراغات بالمقياس النسبي"></svg>
     <ul id="briefPlanRooms" aria-label="أسماء الفراغات المرقمة وأبعادها" hidden></ul>
     <section id="briefWallReview" aria-labelledby="briefWallReviewTitle" hidden>
