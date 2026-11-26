@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefRoomConflict, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefGraphicScale, briefRoomConflict, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { roomWallFootprintReview, roomWallReviewRows, wallSlabClashes } from './coordination.js';
@@ -1530,6 +1530,20 @@ function clearBriefPlan() {
   $('briefPlanStatus').textContent = '';
 }
 
+function drawBriefScale(canvas, scale) {
+  const bar = briefGraphicScale(scale);
+  if (!bar) return;
+  const start = 40, end = start + bar.width, y = 395;
+  const group = el('g', { 'aria-hidden': 'true', direction: 'ltr', fill: '#15372e' });
+  group.append(el('path', { d: 'M ' + start + ' ' + (y - 5) + ' v 10 M ' +
+    end + ' ' + (y - 5) + ' v 10 M ' + start + ' ' + y + ' H ' + end,
+    fill: 'none', stroke: '#15372e', 'stroke-width': 2 }));
+  const label = el('text', { x: start, y: y + 17, 'font-size': 13 });
+  label.textContent = '٠ – ' + thermalLabel(bar.metres) + ' م';
+  group.append(label);
+  canvas.append(group);
+}
+
 function drawBriefPreview(plan) {
   const canvas = $('briefPlanPreview');
   canvas.replaceChildren();
@@ -1577,6 +1591,7 @@ function drawBriefPreview(plan) {
       width: (right - left) * scale, height: (rear - front) * scale,
       fill: 'none', stroke: '#956a28', 'stroke-width': 2, 'stroke-dasharray': '6 4' }));
   }
+  drawBriefScale(canvas, scale);
   canvas.setAttribute('aria-label', 'حد الأرض وتوزيع الفراغات بالمقياس النسبي' +
     (plan.envelope ? ' مع الحد المرجعي المتقطع' : '') +
     (plan.existingRooms.length ? ' والفراغات القائمة بالرمادي' : '') +
@@ -1906,7 +1921,7 @@ $('printBriefPlan').onclick = () => {
   legend.removeAttribute('id');
   legend.classList.add('brief-print-rooms');
   const { frontage, depth, envelope, existingRooms, wallReview } = briefPlan;
-  const caption = 'معاينة للمراجعة بمقياس نسبي · الأرض ' + thermalLabel(frontage) + ' × ' + thermalLabel(depth) + ' م.' +
+  const caption = 'معاينة للمراجعة بمقياس نسبي · الأرض ' + thermalLabel(frontage) + ' × ' + thermalLabel(depth) + ' م. يوضح شريط المقياس المسافة بالمتر.' +
     (envelope ? ' تظهر حدود الارتدادات المدخلة بخط متقطع.' : '') +
     (existingRooms.length ? ' الفراغات القائمة بالرمادي.' : '') +
     (wallReview.overlaps.size ? ' الذهبي يشير إلى التداخل مع المسقط الكامل لجدار قائم.' : '');

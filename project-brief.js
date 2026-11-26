@@ -432,6 +432,15 @@ export function briefPreviewDxf(plan) {
   return dxf([...plan.references, ...outlines]);
 }
 
+export function briefGraphicScale(svgUnitsPerMetre) {
+  const capacity = 120 / svgUnitsPerMetre;
+  if (!Number.isFinite(capacity) || capacity <= 0) return null;
+  const order = 10 ** Math.floor(Math.log10(capacity));
+  const metres = [5, 2, 1].map(multiplier => multiplier * order).find(distance => distance <= capacity);
+  const width = metres * svgUnitsPerMetre;
+  return Number.isFinite(width) && width > 0 ? { metres, width } : null;
+}
+
 export function briefRoomSchedule(plan) {
   return plan.rooms.map((room, index) => {
     const areaM2 = area(room);

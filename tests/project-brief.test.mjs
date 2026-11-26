@@ -617,3 +617,17 @@ test('different explicit cities remain unresolved and keep their source lines', 
     assert.equal(extractBrief('Supplier based in Riyadh.\nCity: ' + invalid).data.city, undefined);
   }
 });
+
+test('the graphic scale uses the same SVG units as the lot for narrow, wide, and small previews', async () => {
+  const { briefGraphicScale } = await import('../project-brief.js');
+  for (const [frontage, depth, expected] of [
+    [20, 30, 10], [5, 5, 1], [1000, 25, 100], [.2, .2, .05], [12, 600, 200],
+  ]) {
+    const units = Math.min(640 / frontage, 340 / depth);
+    const bar = briefGraphicScale(units);
+    assert.equal(bar.metres, expected);
+    assert.ok(bar.width <= 120 + 1e-9);
+    assert.ok(Math.abs(bar.width / (frontage * units) - bar.metres / frontage) < 1e-12);
+  }
+  for (const scale of [0, -1, Infinity, NaN]) assert.equal(briefGraphicScale(scale), null);
+});
