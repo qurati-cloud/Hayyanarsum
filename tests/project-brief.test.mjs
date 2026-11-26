@@ -484,3 +484,45 @@ test('suggestions stay inside setbacks and report when existing rooms leave no p
   assert.deepEqual(customRoomBlockPlan(lot, layout, [{ ...room, h: 3 }], [obstruction]),
     { error: 'partial-fit', names: ['مجلس'] });
 });
+
+test('land dimensions accept shared and mixed metric units consistently in three languages', () => {
+  for (const description of [
+    'أبعاد الأرض: ٢٠٠٠ × ٣٠٠٠ سم',
+    'Plot dimensions: 20000 mm × 30 m',
+    'Dimensions du terrain : 20 mètres par 3000 centimètres',
+    'عرض الأرض: ٢٠٠٠٠ ملليمتر، عمق الأرض: ٣٠٠٠ سنتيمتر',
+    'Frontage 2000 centimetres; depth 30000 millimeters',
+    'Largeur du terrain : 20000 millimètres. Profondeur du terrain : 3000 cm.',
+  ]) assert.deepEqual(extractBrief(description), { data: { frontage: 20, depth: 30 }, conflicts: [] }, description);
+  assert.deepEqual(extractBrief('Frontage 21 cm. Frontage 0.21 m.').data, { frontage: .21 });
+  assert.deepEqual(extractBrief('Plot dimensions: 2000 cm × 30 m\nFrontage 1999 cm.'),
+    { data: { depth: 30 }, conflicts: ['frontage'] });
+  for (const bad of ['Frontage 20 cm squared', 'Depth 30 mm²', 'Depth 30 mm / s', 'عرض الأرض ٢٠٠٠ سم مربع',
+    'Plot dimensions: 1 ft × 3000 cm', 'Plot dimensions: 2000 cm × 30', 'Profondeur : 2 km']) {
+    assert.deepEqual(extractBrief(bad).data, {}, bad);
+  }
+});
+
+test('room dimensions, positions, heights and setbacks convert without imputing missing values', async () => {
+  const { extractBriefRooms, extractBriefSetbacks, customRoomBlockPlan } = await import('../project-brief.js');
+  const input = [
+    'مجلس: ٤٠٠ سم × ٥ م؛ الموضع: ١٠٠٠ مم × ٢ م؛ الارتفاع: ٢٨٠ سم',
+    'Kitchen: 300 × 400 cm; position: 6000 × 2000 mm; height: 2.5 m',
+    'Cuisine: 300 centimètres par 4 mètres; position: 600 cm par 8 m; hauteur: 2500 millimètres',
+    'حمام: ٢٠٠ × ٢٠٠ سم؛ الموضع: ٠ × ٠ مم؛ الارتفاع: ٢ م²',
+    'Front setback: 200 cm', 'الارتداد الأمامي: ٢٠٠٠ مم', 'Recul arrière: 100 centimètres',
+    'Left setback: 0 mm', 'Recul droit: 50 cm',
+  ].join('\n');
+  const rooms = extractBriefRooms(input);
+  assert.deepEqual(rooms.map(({ w, h, x, y, z }) => [w, h, x, y, z]),
+    [[4, 5, 1, 2, 2.8], [3, 4, 6, 2, 2.5], [3, 4, 6, 8, 2.5], [2, 2, 0, 0, null]]);
+  const setbacks = extractBriefSetbacks(input);
+  assert.deepEqual(setbacks, { setbacks: { front: 2, rear: 1, left: 0, right: .5 }, conflicts: [], invalid: [] });
+  const plan = customRoomBlockPlan({ frontage: 10, depth: 14 }, { coordinates: true, setbacks: setbacks.setbacks },
+    rooms.filter(room => room.z !== null));
+  assert.ok(!plan.error);
+  assert.deepEqual(plan.rooms.map(({ x, y, w, h, z }) => [x, y, w, h, z]),
+    [[1, 2, 4, 5, 2.8], [6, 2, 3, 4, 2.5], [6, 8, 3, 4, 2.5]]);
+  const [conflicted] = extractBriefRooms('Kitchen: 3 × 4 m; height: 250 cm\nKitchen: 301 × 400 cm; height: 2501 mm');
+  assert.deepEqual([conflicted.w, conflicted.h, conflicted.z], [null, null, null]);
+});

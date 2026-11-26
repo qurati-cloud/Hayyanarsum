@@ -42,12 +42,30 @@ export function cleanBrief(input) {
 }
 
 const decimal = String.raw`(\d+(?:[.,]\d+)?)`;
-const metricUnit = String.raw`(?:متر|م|m(?:[eè]tres?|eters?)?)(?![\p{L}\p{M}\p{N}/^]|\s*(?:مربع(?:ة)?|مكعب(?:ة)?|carr[ée]s?|square|cub(?:ed|ic|es?))(?![\p{L}\p{M}\p{N}]))`;
+const centimetres = /^(?:سم|سنتيمتر(?:ات)?|cm|centim(?:[eè]tres?|eters?))$/iu;
+const millimetres = /^(?:مم|مل{1,2}يمتر(?:ات)?|mm|millim(?:[eè]tres?|eters?))$/iu;
+const metricUnit = String.raw`(\p{L}+)(?![\p{L}\p{M}\p{N}]|\s*[/^]|\s*(?:مربع(?:ة)?|مكعب(?:ة)?|carr[ée]s?|squared?|cub(?:ed|ic|es?))(?![\p{L}\p{M}\p{N}]))`;
+const metricLength = String.raw`${decimal}\s*${metricUnit}`;
+const metricPair = String.raw`${decimal}(?:\s*${metricUnit})?\s*(?:×|x|في|by|par)\s*${metricLength}`;
+
+function metres(value, unit) {
+  if (!value || !unit) return NaN;
+  const exponent = centimetres.test(unit) ? 'e-2' : millimetres.test(unit) ? 'e-3' :
+    /^(?:م|متر|m(?:[eè]tres?|eters?)?)$/iu.test(unit) ? 'e0' : null;
+  return exponent === null ? NaN : Number(value.replace(',', '.') + exponent);
+}
+
+function metresPair([, first, firstUnit, second, secondUnit]) {
+  return [metres(first, firstUnit ?? secondUnit), metres(second, secondUnit)];
+}
+
+const standaloneLength = new RegExp(String.raw`^${metricLength}\.?$`, 'iu');
+
 const axisDimensions = {
   frontage: String.raw`(?:عرض (?:الأرض|الارض|الواجهة)|\bfrontage|largeur (?:du terrain|de façade))`,
   depth: String.raw`(?:عمق (?:الأرض|الارض)|\b(?:plot )?depth|profondeur(?: du terrain)?)`,
 };
-const plotPair = new RegExp(String.raw`^\s*(?:أبعاد الأرض|ابعاد الارض|lot dimensions|plot dimensions|dimensions du terrain)\s*:\s*${decimal}\s*(?:×|x|في|by|par)\s*${decimal}\s*${metricUnit}\.?\s*$`, 'gmu');
+const plotPair = new RegExp(String.raw`^\s*(?:أبعاد الأرض|ابعاد الارض|lot dimensions|plot dimensions|dimensions du terrain)\s*:\s*${metricPair}\.?\s*$`, 'gmu');
 
 const countTerms = {
   storeys: /(?:طوابق|طابق|أدوار|ادوار|دور|storeys?|stories|floors?|étages?)/u,
@@ -69,12 +87,15 @@ export function extractBrief(description) {
   for (const [kind, pattern] of Object.entries(buildingPatterns)) if (pattern.test(source)) add('kind', kind);
   for (const [city, pattern] of Object.entries(cityNames)) if (pattern.test(source)) add('city', city);
   for (const [key, label] of Object.entries(axisDimensions)) {
-    const explicit = new RegExp(String.raw`${label}\s*[:=]?\s*${decimal}\s*${metricUnit}`, 'gu');
-    for (const match of source.matchAll(explicit)) add(key, Number(match[1].replace(',', '.')));
+    const explicit = new RegExp(String.raw`${label}\s*[:=]?\s*${metricLength}`, 'gu');
+    for (const [, value, unit] of source.matchAll(explicit)) add(key, metres(value, unit));
   }
   for (const match of source.matchAll(plotPair)) {
-    add('frontage', Number(match[1].replace(',', '.')));
-    add('depth', Number(match[2].replace(',', '.')));
+    const [frontage, depth] = metresPair(match);
+    if ([frontage, depth].every(Number.isFinite)) {
+      add('frontage', frontage);
+      add('depth', depth);
+    }
   }
   for (const [key, term] of Object.entries(countTerms)) {
     const inline = new RegExp(String.raw`(?<![\p{L}\p{M}\p{N}.,+−-])(?:(?:وب?|ب)(?=\d|أربع|اربع|ثلاث|خمس))?(\d+|[\p{L}]+)[ \t]*${term.source}(?![\p{L}\p{M}\p{N}]|[ \t]+count\b)`, 'gu');
@@ -129,8 +150,8 @@ export function extractBriefSetbacks(description) {
     if (!side) continue;
     if (!candidates.has(side)) candidates.set(side, new Set());
     if (!match[2]) continue;
-    const metric = /^(\d+(?:[.,]\d+)?)\s*(?:م|متر|m|m[eè]tres?|meters?)\.?$/iu.exec(normalizeNumericInput(match[2]));
-    const value = metric ? Number(metric[1].replace(',', '.')) : NaN;
+    const metric = standaloneLength.exec(normalizeNumericInput(match[2]));
+    const value = metric ? metres(metric[1], metric[2]) : NaN;
     if (validSetback(value)) candidates.get(side).add(value);
     else unrecognized.add(side);
   }
@@ -392,11 +413,9 @@ export function cleanBriefRooms(rooms) {
 }
 
 const customRoomPrefix = /^(?:فراغ|space|espace)\s+/iu;
-const roomDimensions = new RegExp('^' + decimal + String.raw`\s*(?:×|x|في|par|by)\s*` +
-  decimal + String.raw`\s*` + metricUnit + '\\.?$', 'iu');
+const roomDimensions = new RegExp(String.raw`^${metricPair}\.?$`, 'iu');
 
 const roomClause = /^\s*(الموضع|موضع|position|الارتفاع|ارتفاع|height|hauteur)\s*:\s*(.*?)\s*$/iu;
-const roomHeight = new RegExp('^' + decimal + '\\s*' + metricUnit + '\\.?$', 'iu');
 
 export function extractBriefRooms(description) {
   const rooms = new Map();
@@ -421,14 +440,14 @@ export function extractBriefRooms(description) {
     for (const [, label, rawValue] of clauses) {
       const value = normalizeNumericInput(rawValue);
       if (/^(?:الارتفاع|ارتفاع|height|hauteur)$/iu.test(label)) {
-        const match = roomHeight.exec(value);
-        const height = match ? Number(match[1].replace(',', '.')) : NaN;
+        const match = standaloneLength.exec(value);
+        const height = match ? metres(match[1], match[2]) : NaN;
         const previous = heights.get(key);
         heights.set(key, validHeight(height) && (previous === undefined || previous === height) ? height : null);
         continue;
       }
       const match = roomDimensions.exec(value);
-      const pair = match?.slice(1, 3).map(value => Number(value.replace(',', '.')));
+      const pair = match && metresPair(match);
       const previous = positions.get(key);
       if (!pair?.every(validCoordinate) || previous === null ||
           (previous && (previous[0] !== pair[0] || previous[1] !== pair[1]))) positions.set(key, null);
@@ -437,8 +456,8 @@ export function extractBriefRooms(description) {
 
     const dimensions = normalizeNumericInput(rawDimensions);
     const match = roomDimensions.exec(dimensions);
-    const [room] = cleanBriefRooms([{ name, roomUse: use,
-      w: match ? Number(match[1].replace(',', '.')) : null, h: match ? Number(match[2].replace(',', '.')) : null }]);
+    const [w, h] = match ? metresPair(match) : [null, null];
+    const [room] = cleanBriefRooms([{ name, roomUse: use, w, h }]);
     const complete = room.w !== null && room.h !== null;
     const prior = rooms.get(key);
     if (!complete && dimensions) unresolved.add(key);
