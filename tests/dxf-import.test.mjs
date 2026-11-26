@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readDxf } from '../dxf-import.js';
-import { dxf, length, nearestCadEndpoint, wallFromCadLine, wallQuantities, wallsFromRoomEdges } from '../engine.js';
+import { dxf, length, nearestCadEndpoint, wallFootprint, wallFromCadLine, wallQuantities, wallsFromRoomEdges } from '../engine.js';
 
 const drawing = (entities, unit = '6') => [
   '0', 'SECTION', '2', 'HEADER', ...(unit === '' ? [] : ['9', '$INSUNITS', '70', unit]),
@@ -104,4 +104,27 @@ test('batch conversion leaves the original drawing untouched when any axis or wa
   assert.equal(wallsFromRoomEdges([edge], levels, 'ground', { thickness: 0, z: 3 }), null);
   assert.equal(wallsFromRoomEdges([edge], levels, 'ground', { thickness: .2 }), null);
   assert.deepEqual(shapes, snapshot);
+});
+
+test('preview footprints use the exact converter walls and explicit thickness on both sides of each axis', () => {
+  const edge = { type: 'cadLine', layer: 'CAD-REF', cadLayer: 'A-ROOM-EDGE', id: 'edge1',
+    levelId: 'ground', x: 1, y: 2, x2: 5, y2: 2 };
+  const levels = [{ id: 'ground' }, { id: 'upper' }];
+  const upper = { ...edge, id: 'edge2', levelId: 'upper', y: 8, y2: 8 };
+  const existing = { ...edge, id: 'manual', type: 'wall', thickness: .5, z: 3, openings: [] };
+  const shapes = [edge, upper, existing];
+  const result = wallsFromRoomEdges(shapes, levels, 'ground', { thickness: .5, z: 2.8 });
+  assert.deepEqual(result.walls, [result.shapes[0]]);
+  assert.equal(result.walls[0].z, 2.8);
+  assert.deepEqual(wallFootprint(result.walls[0], 0, 4), [
+    [1, 1.75], [5, 1.75], [5, 2.25], [1, 2.25],
+  ]);
+  const revised = wallsFromRoomEdges(shapes, levels, 'ground', { thickness: 1, z: 2.8 });
+  assert.deepEqual(wallFootprint(revised.walls[0], 0, 4), [
+    [1, 1.5], [5, 1.5], [5, 2.5], [1, 2.5],
+  ]);
+  assert.equal(shapes[0].type, 'cadLine');
+  assert.equal(result.shapes[1], upper);
+  assert.equal(result.shapes[2], existing);
+  assert.deepEqual(wallsFromRoomEdges(shapes, levels, 'unknown', { thickness: .5, z: 2.8 }).walls, []);
 });

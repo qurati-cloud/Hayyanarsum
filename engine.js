@@ -273,7 +273,12 @@ export function wallsFromRoomEdges(shapes, levels, levelId, dimensions) {
     if (!wall) return null;
     walls.set(shape, wall);
   }
-  return { shapes: shapes.map(shape => walls.get(shape) ?? shape), count: walls.size };
+  const converted = [...walls.values()];
+  return {
+    shapes: shapes.map(shape => walls.get(shape) ?? shape),
+    count: converted.length,
+    walls: converted,
+  };
 }
 
 export const residentialReference = Object.freeze({

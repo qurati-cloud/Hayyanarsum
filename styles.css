@@ -69,3 +69,11 @@ button:disabled{opacity:.55;cursor:default}
 #briefFillPositionsLabel[hidden]{display:none}
 
 .room-edge-status:empty { margin: 0; }
+
+#roomEdgePreview polygon {
+  fill: #e8ad3b73;
+  stroke: #99691a;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 2;
+  vector-effect: non-scaling-stroke;
+}

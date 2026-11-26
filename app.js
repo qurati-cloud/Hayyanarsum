@@ -294,9 +294,13 @@ const selectedLinear = () => S.shapes.find(shape => shape.id === S.selected && i
 const selectedWall = () => S.shapes.find(shape => shape.id === S.selected && shape.type === 'wall');
 const openingLabel = kind => kind === 'door' ? 'باب' : 'نافذة';
 
+function wallPolygonPoints(wall, start, end) {
+  return wallFootprint(wall, start, end).map(point => point.map(value => value * PX).join(',')).join(' ');
+}
+
 function drawWall(group, wall) {
   for (const { start, end, opening } of wallSpans(wall)) {
-    const points = wallFootprint(wall, start, end).map(point => point.map(value => value * PX).join(',')).join(' ');
+    const points = wallPolygonPoints(wall, start, end);
     const polygon = el('polygon', { points, class: 'shape' + (wall.id === S.selected ? ' selected' : ''),
       stroke: C[wall.layer], fill: opening ? '#fff' : C[wall.layer],
       'stroke-dasharray': opening ? (opening.kind === 'door' ? '3 2' : '8 2') : 'none' });
@@ -426,19 +430,38 @@ $('cadToWallForm').onsubmit = event => {
     event.target.reset();
   }
 };
+function roomEdgeConversion() {
+  const thickness = numberField('roomEdgeThickness');
+  const z = numberField('roomEdgeHeight');
+  if (!validHeight(thickness) || !validHeight(z)) return null;
+  return wallsFromRoomEdges(S.shapes, S.levels, S.activeLevel, { thickness, z });
+}
+
+function renderRoomEdgePreview() {
+  const panel = $('roomEdgeConverter');
+  const preview = $('roomEdgePreview');
+  preview.replaceChildren();
+  const walls = panel.open && !panel.hidden ? roomEdgeConversion()?.walls ?? [] : [];
+  $('roomEdgeApply').disabled = walls.length === 0;
+  $('roomEdgePreviewNote').hidden = walls.length === 0;
+  if (!walls.length) return;
+  const polygons = walls.map(wall => el('polygon', { points: wallPolygonPoints(wall, 0, length(wall)) }));
+  preview.replaceChildren(...polygons);
+}
+
 function renderRoomEdgeConverter(visibleShapes) {
   const count = visibleShapes.filter(isRoomEdge).length;
   $('roomEdgeConverter').hidden = count === 0;
   $('roomEdgeCount').textContent = count.toLocaleString('ar-SA');
   $('roomEdgeStatus').textContent = '';
+  renderRoomEdgePreview();
 }
 
+$('roomEdgeConverter').ontoggle = renderRoomEdgePreview;
+$('roomEdgeForm').oninput = renderRoomEdgePreview;
 $('roomEdgeForm').onsubmit = event => {
   event.preventDefault();
-  const result = wallsFromRoomEdges(S.shapes, S.levels, S.activeLevel, {
-    thickness: numberField('roomEdgeThickness'),
-    z: numberField('roomEdgeHeight'),
-  });
+  const result = roomEdgeConversion();
   if (!result) {
     $('roomEdgeStatus').textContent = 'تحقق من السماكة والارتفاع وإحداثيات الخطوط المرجعية.';
     return;
@@ -601,6 +624,7 @@ function annotatedPlan() {
   svg.removeAttribute('id');
   svg.classList.add('annotated-plan');
   svg.querySelector('#preview').remove();
+  svg.querySelector('#roomEdgePreview').remove();
   if ($('gridRect').hidden) svg.querySelector('#gridRect').remove();
   for (const shape of svg.querySelectorAll('.selected')) shape.classList.remove('selected');
   const view = planView(levelShapes(), levelMeasurements(), PX);
