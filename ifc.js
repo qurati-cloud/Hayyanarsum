@@ -46,6 +46,12 @@ export const isIfcWall = shape => shape?.type === 'wall' && shape.thickness != n
 export const isIfcSlab = shape => shape?.type === 'slab' && valid(shape);
 export const isIfcSpace = shape => shape?.type === 'room' && validHeight(shape.z) && valid(shape);
 
+export function exportBriefIfc(plan, projectName, level) {
+  if (!level || level.id !== plan.levelId) throw new TypeError('Preview refers to a different storey');
+  const rooms = plan.rooms.filter(isIfcSpace).map(room => ({ ...room, levelId: level.id }));
+  return exportIfc(rooms, projectName, [level]);
+}
+
 export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblies = []) {
   const walls = shapes.filter(isIfcWall);
   const slabs = shapes.filter(isIfcSlab);

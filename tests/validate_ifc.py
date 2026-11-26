@@ -96,7 +96,7 @@ def validate_export():
 
 def validate_spaces():
     root = Path(__file__).resolve().parent.parent
-    for flags in [[], ["--spaces-only"]]:
+    for flags in [[], ["--spaces-only"], ["--brief-preview"]]:
         source = subprocess.check_output(
             ["node", "tests/ifc-fixture.mjs", *flags], cwd=root, text=True, encoding="ascii"
         )
@@ -112,6 +112,10 @@ def validate_spaces():
         assert storey.is_a("IfcBuildingStorey") and storey.Elevation == 3.25
         assert not any(space in rel.RelatedElements for rel in model.by_type("IfcRelContainedInSpatialStructure"))
         assert bool(model.by_type("IfcWall")) == (not flags)
+        if flags == ["--brief-preview"]:
+            assert model.by_type("IfcBuildingStorey") == (storey,)
+            assert model.by_type("IfcProject")[0].Name == "معاينة الاختبار"
+            assert not model.by_type("IfcSlab")
 
         world = ifcopenshell.geom.settings()
         world.set("use-world-coords", True)
@@ -121,7 +125,7 @@ def validate_spaces():
             values = vertices[axis::3]
             assert math.isclose(min(values), low) and math.isclose(max(values), high), values
         assert math.isclose(ifcopenshell.util.shape.get_volume(geometry.geometry), 56)
-    print("Verified independent IfcSpace geometry, UUID, storey and spaces-only export.")
+    print("Verified independent IfcSpace geometry, UUID, storey, spaces-only export and direct preview export.")
 
 
 if __name__ == "__main__":

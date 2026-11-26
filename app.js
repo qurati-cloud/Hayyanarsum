@@ -2,7 +2,7 @@ import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefFields, cl
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
-import { exportIfc, isIfcSlab, isIfcSpace, isIfcWall } from './ifc.js';
+import { exportBriefIfc, exportIfc, isIfcSlab, isIfcSpace, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
@@ -1388,6 +1388,7 @@ function clearBriefPlan() {
   briefPlan = undefined;
   $('insertBriefPlan').disabled = true;
   $('exportBriefDxf').disabled = true;
+  $('exportBriefIfc').disabled = true;
   $('refineBriefPositions').hidden = true;
   $('briefPlanPreview').hidden = true;
   $('briefPlanPreview').replaceChildren();
@@ -1613,11 +1614,14 @@ $('briefLayoutForm').onsubmit = event => {
     }[plan.error];
     return;
   }
-  briefPlan = { ...plan, levelId: S.activeLevel };
+  const level = elementLevel({ levelId: S.activeLevel }, S.levels);
+  briefPlan = { ...plan, levelId: level.id, level: { ...level },
+    rooms: plan.rooms.map(room => ({ ...room, id: crypto.randomUUID() })) };
   drawBriefPreview(plan);
   const empty = briefTargetIsEmpty();
   $('insertBriefPlan').disabled = !empty;
   $('exportBriefDxf').disabled = false;
+  $('exportBriefIfc').disabled = !briefPlan.rooms.some(isIfcSpace);
   if ($('briefLayoutMode').value === 'custom' && !layout.coordinates) {
     const refine = $('refineBriefPositions');
     const existing = Array.from($('briefRoomList').querySelectorAll('[data-room-placement] input'))
@@ -1660,6 +1664,25 @@ $('exportBriefDxf').onclick = () => {
     $('briefPlanStatus').textContent = 'تعذّر تصدير المعاينة. راجع الأبعاد وأعد المعاينة.';
   }
 };
+$('exportBriefIfc').onclick = () => {
+  if (!briefPlan) return;
+  const level = elementLevel(briefPlan, S.levels);
+  const status = $('briefPlanStatus');
+  if (!level || level.id !== S.activeLevel || level.name !== briefPlan.level.name ||
+      level.elevation !== briefPlan.level.elevation) {
+    clearBriefPlan();
+    status.textContent = 'تغيّر طابق المعاينة أو منسوبه. أعد المعاينة قبل التصدير.';
+    return;
+  }
+  try {
+    const title = (S.project.name || 'هيا نرسم') + ' · معاينة التوزيع';
+    dl('hayyanarsum-layout-preview.ifc', exportBriefIfc(briefPlan, title, level), 'application/x-step');
+    const count = briefPlan.rooms.filter(isIfcSpace).length;
+    status.textContent = 'جُهّز ملف IFC4 لعدد ' + thermalLabel(count) + ' من الفراغات ذات الارتفاع المحدد.';
+  } catch {
+    status.textContent = 'تعذّر تصدير المعاينة بصيغة IFC. راجع أبعاد الفراغات وطابقها.';
+  }
+};
 $('insertBriefPlan').onclick = () => {
   if (!briefPlan || briefPlan.levelId !== S.activeLevel || !briefTargetIsEmpty()) {
     clearBriefPlan();
@@ -1672,7 +1695,7 @@ $('insertBriefPlan').onclick = () => {
     return;
   }
   commit();
-  S.shapes.push(...shapes.map(shape => ({ ...shape, id: crypto.randomUUID(), levelId: S.activeLevel })));
+  S.shapes.push(...shapes.map(shape => ({ ...shape, id: shape.id ?? crypto.randomUUID(), levelId: S.activeLevel })));
   clearBriefPlan();
   fitDrawing = true;
   selectShape(null);

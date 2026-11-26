@@ -1,4 +1,4 @@
-import { exportIfc } from '../ifc.js';
+import { exportBriefIfc, exportIfc } from '../ifc.js';
 import { extractBriefRooms, customRoomBlockPlan } from '../project-brief.js';
 
 const wall = {
@@ -26,4 +26,8 @@ const brief = extractBriefRooms('مجلس: ٤ × ٥ م؛ الموضع: ١ × ٢ 
 const { rooms } = customRoomBlockPlan({ frontage: 20, depth: 30 }, { coordinates: true }, brief);
 const space = { ...rooms[0], levelId: 'upper', id: '22334455-6677-4899-aabb-ccddeeff0014' };
 const shapes = process.argv.includes('--spaces-only') ? [space, rooms[1]] : [wall, upperWall, slab, space, rooms[1]];
-process.stdout.write(exportIfc(shapes, 'مشروع الاختبار', levels, assemblies));
+const preview = { levelId: 'upper', rooms: [space, rooms[1]] };
+const result = process.argv.includes('--brief-preview')
+  ? exportBriefIfc(preview, 'معاينة الاختبار', levels[1])
+  : exportIfc(shapes, 'مشروع الاختبار', levels, assemblies);
+process.stdout.write(result);
