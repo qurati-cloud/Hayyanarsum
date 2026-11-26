@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { briefRoomConflict, cleanBrief, extractBrief, missingBriefFields } from '../project-brief.js';
+import { briefRoomConflict, cleanBrief, cleanBriefLayout, extractBrief, missingBriefFields } from '../project-brief.js';
+
+test('saved brief layout preserves manual placement, zero offsets and explicit bedroom sizes', () => {
+  const layout = { mode: 'bedrooms', placement: 'manual', fillMissing: false, roomEdges: true,
+    count: 2, width: 4.5, roomDepth: 5, columns: 1, x: 0, y: 3.5 };
+  assert.deepEqual(cleanBriefLayout(JSON.parse(JSON.stringify(layout)), [{ name: 'Kitchen' }], true), layout);
+});
+
+test('saved brief layout keeps coordinate suggestions and sanitizes imported or legacy settings', () => {
+  const rooms = [{ name: 'Kitchen' }];
+  assert.deepEqual(cleanBriefLayout(undefined, rooms, true),
+    { mode: 'custom', placement: 'coordinates', fillMissing: false, roomEdges: false });
+  assert.deepEqual(cleanBriefLayout({ mode: 'custom', placement: 'coordinates', fillMissing: true,
+    roomEdges: 'true', count: 101, columns: 1.5, width: 0, roomDepth: Infinity, x: '0', y: -1 }),
+    { mode: 'custom', placement: 'coordinates', fillMissing: true, roomEdges: false });
+  assert.deepEqual(cleanBriefLayout({ mode: 'bedrooms', placement: 'coordinates', fillMissing: true }),
+    { mode: 'bedrooms', placement: 'automatic', fillMissing: false, roomEdges: false });
+});
 
 test('extracts explicitly named Arabic inputs, including dual storeys and decimal metres', () => {
   const { data, conflicts } = extractBrief('فيلا في الرياض من طابقين بأربع غرف نوم. عرض الأرض ٢٠٫٥ متر، وعمق الأرض ٣٠ م.');

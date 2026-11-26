@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefGraphicScale, briefRoomConflict, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefGraphicScale, briefRoomConflict, briefFields, cleanBrief, cleanBriefLayout, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { roomWallFootprintReview, roomWallReviewRows, wallSlabClashes } from './coordination.js';
@@ -1385,12 +1385,22 @@ function renderBriefEvidence(evidence = {}) {
   }
 }
 
+const briefLayoutNumberFields = {
+  count: 'briefLayoutCount', width: 'briefLayoutWidth', roomDepth: 'briefLayoutDepth',
+  columns: 'briefLayoutColumns', x: 'briefLayoutX', y: 'briefLayoutY',
+};
+
 function loadBriefForm() {
   clearCitySuggestion();
   renderBriefEvidence();
   const saved = S.project.brief ?? {};
-  $('briefFillPositions').checked = false;
-  $('briefUseRoomEdges').checked = false;
+  const rooms = saved.rooms ?? [];
+  const layout = cleanBriefLayout(saved.layout, rooms, saved.positionRooms);
+  $('briefLayoutMode').value = layout.mode;
+  $('briefPlacement').value = layout.placement;
+  $('briefFillPositions').checked = layout.fillMissing;
+  $('briefUseRoomEdges').checked = layout.roomEdges;
+  for (const [key, id] of Object.entries(briefLayoutNumberFields)) $(id).value = layout[key] ?? '';
   $('briefDescription').value = saved.description ?? '';
   for (const key of Object.keys(briefFields)) briefField(key).value = saved.fields?.[key] ?? '';
   $('briefUseSetbacks').checked = Boolean(saved.setbacks);
@@ -1404,12 +1414,8 @@ function loadBriefForm() {
     if (value != null) manuallyEditedSetbacks.add(side);
   }
   updateBriefSetbackFields();
-  const rooms = saved.rooms ?? [];
   $('briefRoomList').replaceChildren();
   for (const room of rooms) addBriefRoom(room);
-  $('briefLayoutMode').value = rooms.length ? 'custom' : 'bedrooms';
-  if (rooms.length && saved.positionRooms) $('briefPlacement').value = 'coordinates';
-  else if ($('briefPlacement').value === 'coordinates') $('briefPlacement').value = 'automatic';
   manuallyEditedBriefRooms = rooms.length > 0;
   $('briefAddRoom').disabled = rooms.length >= 100;
   updateBriefLayoutMode();
@@ -1496,9 +1502,16 @@ briefReview.onsubmit = event => {
     }
   }
   commit();
+  const layout = cleanBriefLayout({
+    mode: $('briefLayoutMode').value,
+    placement: $('briefPlacement').value,
+    fillMissing: $('briefFillPositions').checked,
+    roomEdges: $('briefUseRoomEdges').checked,
+    ...Object.fromEntries(Object.entries(briefLayoutNumberFields).map(([key, id]) => [key, numberField(id)])),
+  });
   S.project.brief = { description: $('briefDescription').value.trim(), fields,
     rooms: cleanBriefRooms(briefCustomRooms()), setbacks: readBriefSetbacks(),
-    positionRooms: $('briefPlacement').value === 'coordinates' };
+    layout, positionRooms: layout.placement === 'coordinates' };
   try {
     localStorage.setItem('hayyanarsum-v2', JSON.stringify(S));
     $('briefStatus').textContent = 'حُفظت المسودة في المشروع على هذا الجهاز.';
@@ -2033,10 +2046,12 @@ function readProject(data) {
   project.thermal = cleanThermalAssemblies(data.project?.thermal);
   const brief = data.project?.brief;
   if (brief && typeof brief === 'object') {
+    const rooms = cleanBriefRooms(brief.rooms);
     project.brief = {
       description: typeof brief.description === 'string' ? brief.description.slice(0, 4000) : '',
       fields: cleanBrief(brief.fields),
-      rooms: cleanBriefRooms(brief.rooms),
+      rooms,
+      layout: cleanBriefLayout(brief.layout, rooms, brief.positionRooms === true),
       positionRooms: brief.positionRooms === true,
       setbacks: cleanSetbacks(brief.setbacks),
     };

@@ -462,6 +462,24 @@ const roomLabels = {
 
 const validRoomDimension = value => Number.isFinite(value) && value > 0 && value <= 1e6;
 
+export function cleanBriefLayout(input, rooms = [], positionRooms = false) {
+  const mode = ['bedrooms', 'custom'].includes(input?.mode) ? input.mode : rooms.length ? 'custom' : 'bedrooms';
+  let placement = ['automatic', 'manual', 'coordinates'].includes(input?.placement)
+    ? input.placement : positionRooms ? 'coordinates' : 'automatic';
+  if (mode !== 'custom' && placement === 'coordinates') placement = 'automatic';
+
+  const count = value => Number.isInteger(value) && value >= 1 && value <= 100;
+  const layout = { mode, placement, fillMissing: placement === 'coordinates' && input?.fillMissing === true,
+    roomEdges: input?.roomEdges === true };
+  for (const [key, validate] of Object.entries({
+    count, columns: count, width: validRoomDimension, roomDepth: validRoomDimension,
+    x: validCoordinate, y: validCoordinate,
+  })) {
+    if (validate(input?.[key])) layout[key] = input[key];
+  }
+  return layout;
+}
+
 export function cleanBriefRooms(rooms) {
   if (!Array.isArray(rooms)) return [];
   return rooms.slice(0, 100).flatMap(room => {
