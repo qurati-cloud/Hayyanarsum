@@ -67,7 +67,7 @@ test('explicit room lines populate types and metric dimensions while leaving mis
     { name: 'مطبخ', roomUse: 'kitchen', w: null, h: null },
     { name: 'Bedroom 2', roomUse: 'bedroom', w: 3, h: 4 },
     { name: 'Cuisine', roomUse: 'kitchen', w: 2.5, h: 3 },
-    { name: 'حمام', roomUse: 'bathroom', w: null, h: null },
+    { name: 'حمام', roomUse: 'bathroom', w: 2, h: null },
     { name: 'Corridor', roomUse: 'corridor', w: null, h: null },
   ]);
 });
@@ -208,7 +208,7 @@ test('a named room is kept for review when its dimensions are missing, inconsist
   );
   assert.deepEqual(rooms, [
     { name: 'مخزن', roomUse: '', w: null, h: null },
-    { name: 'Laundry', roomUse: '', w: null, h: null },
+    { name: 'Laundry', roomUse: '', w: 2, h: null },
     { name: 'Atelier', roomUse: '', w: null, h: null },
     { name: 'Bedroom 1', roomUse: 'bedroom', w: 4, h: 5 },
   ]);
@@ -524,7 +524,7 @@ test('room dimensions, positions, heights and setbacks convert without imputing 
   assert.deepEqual(plan.rooms.map(({ x, y, w, h, z }) => [x, y, w, h, z]),
     [[1, 2, 4, 5, 2.8], [6, 2, 3, 4, 2.5], [6, 8, 3, 4, 2.5]]);
   const [conflicted] = extractBriefRooms('Kitchen: 3 × 4 m; height: 250 cm\nKitchen: 301 × 400 cm; height: 2501 mm');
-  assert.deepEqual([conflicted.w, conflicted.h, conflicted.z], [null, null, null]);
+  assert.deepEqual([conflicted.w, conflicted.h, conflicted.z], [null, 4, null]);
 });
 
 test('project field evidence keeps original text and line numbers for equivalent and conflicting values', () => {
@@ -552,4 +552,37 @@ test('evidence includes both original lines for a measurement split across lines
     data: { frontage: 20 }, conflicts: [],
     evidence: { frontage: [{ value: 20, line: 1, text: 'Frontage:\n  2000 cm.' }] },
   });
+});
+
+test('explicit width and depth may be supplied individually in Arabic, English or French', async () => {
+  const { extractBriefRooms, cleanBriefRooms, customRoomBlockPlan } = await import('../project-brief.js');
+  const input = [
+    'مجلس: العرض: ٤٠٠ سم؛ الارتفاع: ٢٨٠ سم',
+    'Kitchen: depth 3 metres',
+    'Cuisine: profondeur : 350 cm; largeur : 2500 mm; position : 1 × 2 m',
+  ].join('\n');
+  const rooms = extractBriefRooms(input);
+  assert.deepEqual(rooms, [
+    { name: 'مجلس', roomUse: 'living', w: 4, h: null, z: 2.8 },
+    { name: 'Kitchen', roomUse: 'kitchen', w: null, h: 3 },
+    { name: 'Cuisine', roomUse: 'kitchen', w: 2.5, h: 3.5, x: 1, y: 2 },
+  ]);
+  assert.deepEqual(cleanBriefRooms(rooms), rooms);
+  assert.equal(customRoomBlockPlan({ frontage: 15, depth: 10 }, { automatic: true }, rooms).error, 'layout');
+  const complete = extractBriefRooms(input + '\nمجلس: العمق: ٥ م\nKitchen: width 2 metres');
+  const plan = customRoomBlockPlan({ frontage: 15, depth: 10 }, { automatic: true }, complete);
+  assert.deepEqual(plan.rooms.map(({ w, h }) => [w, h]), [[4, 5], [2, 3], [2.5, 3.5]]);
+});
+
+test('contradictions and unsupported units in named room dimensions leave only the affected field unresolved', async () => {
+  const { extractBriefRooms } = await import('../project-brief.js');
+  const rooms = extractBriefRooms([
+    'مجلس: ٤ × ٥ م؛ العرض: ٤٠٠ سم',
+    'مجلس: العرض: ٤٫١ م',
+    'مجلس: العرض: ٤ م',
+    'Kitchen: width 3 m; depth 8 ft',
+    'Salon: largeur : 4 m; profondeur :',
+    'Salon: profondeur : 300 cm',
+  ].join('\n'));
+  assert.deepEqual(rooms.map(({ w, h }) => [w, h]), [[null, 5], [3, null], [4, 3]]);
 });

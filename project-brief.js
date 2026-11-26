@@ -422,13 +422,14 @@ const roomLabels = {
   corridor: /^(?:ممر|hallway|corridor|couloir)$/iu,
 };
 
+const validRoomDimension = value => Number.isFinite(value) && value > 0 && value <= 1e6;
+
 export function cleanBriefRooms(rooms) {
   if (!Array.isArray(rooms)) return [];
-  const dimension = value => Number.isFinite(value) && value > 0 && value <= 1e6 ? value : null;
   return rooms.slice(0, 100).flatMap(room => {
     if (typeof room?.name !== 'string' || !room.name.trim()) return [];
     return [{ name: room.name.trim().slice(0, 160), roomUse: residentialRoomMetadata(room.roomUse, false).roomUse,
-      w: dimension(room.w), h: dimension(room.h),
+      w: validRoomDimension(room.w) ? room.w : null, h: validRoomDimension(room.h) ? room.h : null,
       ...(validCoordinate(room.x) ? { x: room.x } : {}),
       ...(validCoordinate(room.y) ? { y: room.y } : {}),
       ...(validHeight(room.z) ? { z: room.z } : {}) }];
@@ -438,19 +439,29 @@ export function cleanBriefRooms(rooms) {
 const customRoomPrefix = /^(?:فراغ|space|espace)\s+/iu;
 const roomDimensions = new RegExp(String.raw`^${metricPair}\.?$`, 'iu');
 
-const roomClause = /^\s*(الموضع|موضع|position|الارتفاع|ارتفاع|height|hauteur)\s*:\s*(.*?)\s*$/iu;
+const roomClause = /^\s*(الموضع|موضع|position|الارتفاع|ارتفاع|height|hauteur|العرض|عرض|width|largeur|العمق|عمق|depth|profondeur)(?:\s*:\s*|\s+)(.*?)\s*$/iu;
+const roomMeasures = {
+  w: /^(?:العرض|عرض|width|largeur)$/iu,
+  h: /^(?:العمق|عمق|depth|profondeur)$/iu,
+  z: /^(?:الارتفاع|ارتفاع|height|hauteur)$/iu,
+};
+const mergeRoomMeasure = (previous, value, validate) =>
+  validate(value) && (previous === undefined || previous === value) ? value : null;
 
 export function extractBriefRooms(description) {
   const rooms = new Map();
   const positions = new Map();
-  const heights = new Map();
-  const unresolved = new Set();
   for (const line of description.slice(0, 4000).normalize('NFKC').split(/\r?\n/u)) {
     const [roomText, ...details] = line.split(/[;؛]/u);
+    const separator = roomText.indexOf(':');
+    if (separator === -1) continue;
+    const rawName = roomText.slice(0, separator);
+    const dimensions = normalizeNumericInput(roomText.slice(separator + 1));
+    const leadingClause = roomClause.exec(dimensions);
     const clauses = details.map(part => roomClause.exec(part));
     if (clauses.some(clause => !clause)) continue;
-    const [rawName, rawDimensions, ...extra] = roomText.split(':');
-    if (rawDimensions === undefined || extra.length) continue;
+    if (leadingClause) clauses.unshift(leadingClause);
+
     const label = normalizeNumericInput(rawName.replace(/^\s*[-•]\s*/u, ''));
     const custom = customRoomPrefix.test(label);
     const name = label.replace(customRoomPrefix, '').trim();
@@ -460,13 +471,23 @@ export function extractBriefRooms(description) {
     const use = Object.keys(roomLabels).find(type => roomLabels[type].test(kind));
     if ((!use && !custom) || (!rooms.has(key) && rooms.size >= 100)) continue;
 
-    for (const [, label, rawValue] of clauses) {
+    const room = rooms.get(key) ?? { name, roomUse: use };
+    if (dimensions && !leadingClause) {
+      const match = roomDimensions.exec(dimensions);
+      const pair = match ? metresPair(match) : [];
+      const [w, h] = pair.every(Number.isFinite) ? pair : [];
+      room.w = mergeRoomMeasure(room.w, w, validRoomDimension);
+      room.h = mergeRoomMeasure(room.h, h, validRoomDimension);
+    }
+
+    for (const [, field, rawValue] of clauses) {
       const value = normalizeNumericInput(rawValue);
-      if (/^(?:الارتفاع|ارتفاع|height|hauteur)$/iu.test(label)) {
+      const measure = Object.keys(roomMeasures).find(item => roomMeasures[item].test(field));
+      if (measure) {
+        if (!value && measure !== 'z') continue;
         const match = standaloneLength.exec(value);
-        const height = match ? metres(match[1], match[2]) : NaN;
-        const previous = heights.get(key);
-        heights.set(key, validHeight(height) && (previous === undefined || previous === height) ? height : null);
+        const metric = match ? metres(match[1], match[2]) : NaN;
+        room[measure] = mergeRoomMeasure(room[measure], metric, measure === 'z' ? validHeight : validRoomDimension);
         continue;
       }
       const match = roomDimensions.exec(value);
@@ -477,20 +498,12 @@ export function extractBriefRooms(description) {
       else positions.set(key, pair);
     }
 
-    const dimensions = normalizeNumericInput(rawDimensions);
-    const match = roomDimensions.exec(dimensions);
-    const [w, h] = match ? metresPair(match) : [null, null];
-    const [room] = cleanBriefRooms([{ name, roomUse: use, w, h }]);
-    const complete = room.w !== null && room.h !== null;
-    const prior = rooms.get(key);
-    if (!complete && dimensions) unresolved.add(key);
-    if (prior?.w != null && prior.h != null && complete && (prior.w !== room.w || prior.h !== room.h)) unresolved.add(key);
-    if (!prior || (prior.w === null && complete)) rooms.set(key, room);
+    rooms.set(key, room);
   }
   return [...rooms].map(([key, room]) => {
-    const dimensions = unresolved.has(key) ? { ...room, w: null, h: null } : room;
+    const [dimensions] = cleanBriefRooms([room]);
     const [x, y] = positions.get(key) ?? [null, null];
     return { ...dimensions, ...(positions.has(key) ? { x, y } : {}),
-      ...(heights.has(key) ? { z: heights.get(key) } : {}) };
+      ...(Object.hasOwn(room, 'z') ? { z: room.z } : {}) };
   });
 }
