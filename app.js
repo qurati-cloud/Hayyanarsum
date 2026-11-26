@@ -1298,9 +1298,15 @@ aiCityButton.onclick = async () => {
       body: JSON.stringify({ description }),
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error('AI unavailable');
     const result = await response.json();
     if (cityRequest !== controller) return;
+    if (!response.ok) {
+      if (result.error === 'model-not-installed') {
+        aiCityStatus.textContent = 'النموذج المحلي المحدد غير متاح في Ollama. يمكنك متابعة الاستخراج بالقواعد المحلية.';
+        return;
+      }
+      throw new Error('AI unavailable');
+    }
     citySuggestion = result.city;
     aiCityStatus.textContent = citySuggestion ? 'المدينة المقترحة للمراجعة: ' + citySuggestion :
       'لم يتوفر اقتراح موثّق من نص الوصف. اكتب المدينة في الحقل أدناه.';

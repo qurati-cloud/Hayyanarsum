@@ -27,9 +27,30 @@ export function groundedCity(description, candidate) {
   return null;
 }
 
+const ollamaOrigin = 'http://127.0.0.1:11434';
+const modelWithTag = name => name.split('/').at(-1).includes(':') ? name : name + ':latest';
+
+export class LocalBriefModelMissing extends Error {}
+
+async function requireLocalModel(model, request) {
+  const response = await request(ollamaOrigin + '/api/tags', {
+    method: 'GET', redirect: 'error', signal: AbortSignal.timeout(3000),
+  });
+  if (!response.ok) throw new Error('Ollama unavailable');
+  const listing = await response.json();
+  if (!Array.isArray(listing?.models)) throw new Error('Invalid Ollama model list');
+  const installed = listing.models.some(item => {
+    const name = item?.model ?? item?.name;
+    return typeof name === 'string' && modelWithTag(name) === modelWithTag(model) &&
+      Number.isFinite(item.size) && item.size > 0 && !item.remote_model && !item.remote_host;
+  });
+  if (!installed) throw new LocalBriefModelMissing('Configured model not found in local Ollama');
+}
+
 export async function suggestBriefCity(description, model, request = fetch) {
   if (hasLocalCity(description)) return null;
-  const response = await request('http://127.0.0.1:11434/api/chat', {
+  await requireLocalModel(model, request);
+  const response = await request(ollamaOrigin + '/api/chat', {
     method: 'POST',
     redirect: 'error',
     headers: { 'Content-Type': 'application/json' },

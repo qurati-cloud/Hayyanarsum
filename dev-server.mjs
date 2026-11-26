@@ -2,7 +2,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { suggestBriefCity } from './brief-ai.mjs';
+import { LocalBriefModelMissing, suggestBriefCity } from './brief-ai.mjs';
 
 const args = process.argv.slice(2);
 const value = flag => args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
@@ -52,8 +52,8 @@ async function citySuggestion(req, res) {
   }
   try {
     return json(res, 200, { city: await suggestBriefCity(description, model) });
-  } catch {
-    return json(res, 503, { error: 'provider' });
+  } catch (error) {
+    return json(res, 503, { error: error instanceof LocalBriefModelMissing ? 'model-not-installed' : 'provider' });
   }
 }
 
