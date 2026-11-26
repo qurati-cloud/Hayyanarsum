@@ -449,3 +449,38 @@ test('inserting a brief into an existing plan allows touching rooms and reports 
   assert.equal(briefRoomConflict([proposed], []), null);
   assert.equal(briefRoomConflict([], [overlap]), null);
 });
+
+test('suggest only missing positions around rooms already drawn and a pinned new room', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const lot = { frontage: 12, depth: 10 };
+  const manualRoom = { type: 'room', name: 'مجلس قائم', x: -1, y: 0, w: 5, h: 3 };
+  const manualSlab = { type: 'slab', x: 0, y: 0, w: 12, h: 10 };
+  const pinned = { name: 'مخزن', w: 2, h: 3, x: 4, y: 0 };
+  const missingX = { name: 'مطبخ', w: 3, h: 2, y: 0 };
+  const missingY = { name: 'معيشة', w: 4, h: 3, x: 0 };
+  const original = [manualRoom, manualSlab];
+  const snapshot = structuredClone(original);
+  const plan = customRoomBlockPlan(lot, { coordinates: true, fillMissing: true },
+    [missingX, missingY, pinned], original);
+  assert.deepEqual(plan.rooms.map(({ x, y }) => [x, y]), [[6, 0], [0, 3], [4, 0]]);
+  assert.deepEqual(plan.suggestedIndices, [0, 1]);
+  assert.equal(briefRoomConflict(plan.rooms, original), null);
+  const overlappingPin = { ...pinned, x: 1 };
+  const pinnedPlan = customRoomBlockPlan(lot, { coordinates: true, fillMissing: true }, [overlappingPin], original);
+  assert.equal(pinnedPlan.rooms[0].x, 1);
+  assert.deepEqual(briefRoomConflict(pinnedPlan.rooms, original), { proposed: 'مخزن', existing: 'مجلس قائم' });
+  assert.deepEqual(original, snapshot);
+});
+
+test('suggestions stay inside setbacks and report when existing rooms leave no place', async () => {
+  const { customRoomBlockPlan } = await import('../project-brief.js');
+  const lot = { frontage: 10, depth: 10 };
+  const layout = { coordinates: true, fillMissing: true, setbacks: { front: 2, rear: 1, left: 1, right: 1 } };
+  const beforeFront = { type: 'room', x: 1, y: 0, w: 8, h: 1 };
+  const obstruction = { type: 'room', x: 1, y: 2, w: 8, h: 5 };
+  const room = { name: 'مجلس', w: 4, h: 2 };
+  const plan = customRoomBlockPlan(lot, layout, [room], [beforeFront, obstruction]);
+  assert.deepEqual(plan.rooms.map(({ x, y }) => [x, y]), [[1, 7]]);
+  assert.deepEqual(customRoomBlockPlan(lot, layout, [{ ...room, h: 3 }], [obstruction]),
+    { error: 'partial-fit', names: ['مجلس'] });
+});

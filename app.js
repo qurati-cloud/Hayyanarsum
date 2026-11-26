@@ -1675,8 +1675,9 @@ $('briefLayoutForm').onsubmit = event => {
     columns: numberField('briefLayoutColumns'), x: numberField('briefLayoutX'), y: numberField('briefLayoutY'),
     setbacks: readBriefSetbacks(),
   };
+  const floor = briefFloorContents();
   const plan = $('briefLayoutMode').value === 'custom'
-    ? customRoomBlockPlan(brief, layout, briefCustomRooms())
+    ? customRoomBlockPlan(brief, layout, briefCustomRooms(), floor.shapes)
     : bedroomBlockPlan(brief, {
       ...layout, count: numberField('briefLayoutCount'),
       width: numberField('briefLayoutWidth'), roomDepth: numberField('briefLayoutDepth'),
@@ -1691,7 +1692,7 @@ $('briefLayoutForm').onsubmit = event => {
     status.textContent = {
       brief: 'أكمل عرض الأرض وعمقها. في وضع غرف النوم المتماثلة، أدخل أيضًا عدد غرف النوم في المشروع.',
       'bedroom-count': 'أدخل إجمالي غرف النوم في بيانات المشروع بحيث يشمل غرف هذا الطابق.',
-      'partial-fit': 'تعذّر إيجاد موضع للفراغ «' + plan.names?.[0] + '» ضمن الحدود والمواقع الحالية. عدّل الترتيب أو المواقع.',
+      'partial-fit': 'تعذّر إيجاد موضع للفراغ «' + plan.names?.[0] + '» ضمن الحدود مع مراعاة الفراغات القائمة والإحداثيات المثبتة. عدّل الترتيب أو المواقع.',
       coordinates: 'تحقّق من إحداثيات الفراغ: ' + plan.names?.[0],
       'room-overlap': 'يتداخل الفراغان «' + plan.names?.[0] + '» و«' + plan.names?.[1] + '». عدّل موقع أحدهما.',
       layout: (layout.automatic || layout.coordinates) ? 'تحقق من أسماء الفراغات وأبعادها.' : 'تحقق من أسماء الفراغات وأبعادها والإزاحة وعدد الفراغات في الصف.',
@@ -1704,7 +1705,6 @@ $('briefLayoutForm').onsubmit = event => {
     return;
   }
   const level = elementLevel({ levelId: S.activeLevel }, S.levels);
-  const floor = briefFloorContents();
   const occupied = floor.shapes.length > 0 || floor.measurements.length > 0;
   const roomConflict = briefRoomConflict(plan.rooms, floor.shapes);
   briefPlan = { ...plan, levelId: level.id, level: { ...level }, occupied, roomConflict,

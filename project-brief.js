@@ -193,11 +193,12 @@ export function briefRoomConflict(proposedRooms, currentShapes) {
 
 function proposedCoordinate(block, bounds, placed) {
   const yOptions = block.y == null
-    ? [...new Set([bounds.front, ...placed.map(room => room.y + room.h)])].sort((a, b) => a - b)
+    ? [...new Set([bounds.front, ...placed.map(room => room.y + room.h)])]
+      .filter(y => y >= bounds.front).sort((a, b) => a - b)
     : [block.y];
   const ordered = [...placed].sort((a, b) => a.x - b.x);
   for (const y of yOptions) {
-    if (!fits(y + block.h, bounds.rear)) continue;
+    if (!fits(y + block.h, bounds.rear)) break;
     let x = block.x ?? bounds.left;
     for (const room of ordered) {
       if (!intervalsOverlap(y, y + block.h, room.y, room.y + room.h)) continue;
@@ -214,7 +215,7 @@ function proposedCoordinate(block, bounds, placed) {
   return null;
 }
 
-function layoutWithCoordinates(blocks, bounds, outside, fillMissing) {
+function layoutWithCoordinates(blocks, bounds, outside, fillMissing, obstacles) {
   const rooms = [];
   const suggestedIndices = [];
   const indices = blocks.map((_, index) => index);
@@ -232,7 +233,7 @@ function layoutWithCoordinates(blocks, bounds, outside, fillMissing) {
     if ((x != null && (!fits(bounds.left, x) || !fits(x + w, bounds.right))) ||
         (y != null && (!fits(bounds.front, y) || !fits(y + h, bounds.rear)))) return { error: outside, names: [block.name] };
     if (missing) {
-      const proposal = proposedCoordinate(block, bounds, placed);
+      const proposal = proposedCoordinate(block, bounds, [...obstacles, ...placed]);
       if (!proposal) return { error: 'partial-fit', names: [block.name] };
       ({ x, y } = proposal);
       suggestedIndices.push(index);
@@ -248,7 +249,7 @@ function layoutWithCoordinates(blocks, bounds, outside, fillMissing) {
   return { rooms, suggestedIndices };
 }
 
-function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic, coordinates, fillMissing }, blocks) {
+function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic, coordinates, fillMissing }, blocks, currentShapes = []) {
   const { frontage, depth } = cleanBrief(brief);
   if (!frontage || !depth) return { error: 'brief' };
   if (!blocks.length || blocks.length > 100 || blocks.some(({ name, w, h }) =>
@@ -270,7 +271,10 @@ function placeRoomBlocks(brief, { columns, x, y, setbacks, automatic, coordinate
   if (envelope) references.push(...rectangularReferences(envelope, 'SITE-LIMIT', 'حد مرجعي للتوزيع'));
   const site = { frontage, depth, envelope, references };
   if (coordinates) {
-    const placement = layoutWithCoordinates(blocks, bounds, outside, fillMissing);
+    const obstacles = fillMissing ? currentShapes.filter(shape => shape.type === 'room' &&
+      intervalsOverlap(bounds.left, bounds.right, shape.x, shape.x + shape.w) &&
+      intervalsOverlap(bounds.front, bounds.rear, shape.y, shape.y + shape.h)) : [];
+    const placement = layoutWithCoordinates(blocks, bounds, outside, fillMissing, obstacles);
     return placement.error ? placement : { ...site, ...placement };
   }
 
@@ -300,12 +304,12 @@ export function bedroomBlockPlan(brief, layout) {
   return placeRoomBlocks(brief, { ...layout, coordinates: false }, blocks);
 }
 
-export function customRoomBlockPlan(brief, layout, rooms) {
+export function customRoomBlockPlan(brief, layout, rooms, currentShapes) {
   const { bedrooms } = cleanBrief(brief);
   const count = rooms.filter(room => room.roomUse === 'bedroom').length;
   if (count && bedrooms === undefined) return { error: 'bedroom-count' };
   if (bedrooms !== undefined && count > bedrooms) return { error: 'bedroom-count' };
-  return placeRoomBlocks(brief, layout, rooms);
+  return placeRoomBlocks(brief, layout, rooms, currentShapes);
 }
 
 const sameCoordinate = (a, b) => fits(a, b) && fits(b, a);
