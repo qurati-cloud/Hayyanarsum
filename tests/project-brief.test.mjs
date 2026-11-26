@@ -586,3 +586,34 @@ test('contradictions and unsupported units in named room dimensions leave only t
   ].join('\n'));
   assert.deepEqual(rooms.map(({ w, h }) => [w, h]), [[null, 5], [3, null], [4, 3]]);
 });
+
+test('an explicitly labeled project city is read locally in all three description languages', () => {
+  for (const [description, city] of [
+    ['فيلا. مكتب التصميم في الرياض.\nمدينة المشروع: حائل', 'حائل'],
+    ['A house. Supplier based in Jeddah.\nProject city: Al Ula', 'Al Ula'],
+    ['Maison. Les matériaux viennent de Riyad.\nVille du projet : Béni Mellal', 'Béni Mellal'],
+    ['مدينة المشروع: Al-Khobar\nCity: الخبر', 'الخبر'],
+    ['City: Al Ula\nCity: AL ULA', 'Al Ula'],
+  ]) {
+    const { data, conflicts, evidence } = extractBrief(description, { includeEvidence: true });
+    assert.equal(data.city, city);
+    assert.deepEqual(conflicts, []);
+    const [clue] = evidence.city;
+    assert.equal(clue.value, city);
+    assert.match(clue.text, /:/u);
+  }
+});
+
+test('different explicit cities remain unresolved and keep their source lines', () => {
+  const { data, conflicts, evidence } = extractBrief('\nمدينة المشروع: حائل\nVille : Tabouk', { includeEvidence: true });
+  assert.equal(data.city, undefined);
+  assert.deepEqual(conflicts, ['city']);
+  assert.deepEqual(evidence.city, [
+    { value: 'حائل', line: 2, text: 'مدينة المشروع: حائل' },
+    { value: 'Tabouk', line: 3, text: 'Ville : Tabouk' },
+  ]);
+  assert.deepEqual(extractBrief('Project city: Tabouk or Al Ula').conflicts, ['city']);
+  for (const invalid of ['N/A 42', '---', '', 'https://example.invalid']) {
+    assert.equal(extractBrief('Supplier based in Riyadh.\nCity: ' + invalid).data.city, undefined);
+  }
+});

@@ -23,6 +23,16 @@ const cityNames = {
   الخبر: /الخبر|\bal[- ]khobar\b/iu,
   أبها: /أبها|ابها|\babha\b/iu,
 };
+const labeledCity = /^[ \t]*(?:[-•][ \t]*)?(?:المدينة|مدينة المشروع|(?:project )?city|ville(?: du projet)?)[ \t]*:[ \t]*([^\r\n]*)/gimu;
+const briefCityName = /^\p{L}[\p{L}\p{M} .’'\-]{0,159}$/u;
+
+function namedCities(value) {
+  const names = value.trim().replace(/\.$/u, '').split(/\s+(?:أو|او|و|or|and|ou|et)\s+|\s*[/،,]\s*/iu).map(name => name.trim());
+  if (!names.every(name => briefCityName.test(name))) return [];
+  return names.map(name =>
+    Object.entries(cityNames).find(([, pattern]) => pattern.exec(name)?.[0] === name)?.[0] ?? name);
+}
+
 const words = { 'ثلاث': 3, 'ثلاثة': 3, 'أربع': 4, 'أربعة': 4, 'اربع': 4, 'اربعة': 4,
   'خمس': 5, 'خمسة': 5, one: 1, two: 2, three: 3, four: 4, five: 5,
   un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5 };
@@ -80,20 +90,21 @@ const countValue = raw => Object.hasOwn(words, raw) ? words[raw] : /^\d+$/u.test
 export function extractBrief(description, { includeEvidence = false } = {}) {
   const raw = description.slice(0, 4000);
   const original = raw.trimStart();
-  const source = normalizeNumericInput(original.normalize('NFKC').toLowerCase()).replace(/[\u064B-\u065F\u0670]/gu, '');
+  const normalized = normalizeNumericInput(original.normalize('NFKC')).replace(/[\u064B-\u065F\u0670]/gu, '');
+  const source = normalized.toLowerCase();
   const candidates = Object.fromEntries(Object.keys(briefFields).map(key => [key, new Set()]));
   const lines = includeEvidence ? original.split('\n') : [];
   const lineOffset = includeEvidence ? raw.slice(0, raw.length - original.length).split('\n').length - 1 : 0;
   const evidence = {};
-  const add = (key, value, match) => {
+  const add = (key, value, match, matchSource = source) => {
     const clean = cleanBrief({ [key]: value });
     if (!Object.hasOwn(clean, key) || candidates[key].has(clean[key])) return;
     candidates[key].add(clean[key]);
     if (includeEvidence) {
       const start = match.index + match[0].search(/\S/u);
       const end = match.index + match[0].trimEnd().length;
-      const firstLine = source.slice(0, start).split('\n').length;
-      const lastLine = source.slice(0, end).split('\n').length;
+      const firstLine = matchSource.slice(0, start).split('\n').length;
+      const lastLine = matchSource.slice(0, end).split('\n').length;
       const text = lines.slice(firstLine - 1, lastLine).join('\n').trim();
       (evidence[key] ??= []).push({ value: clean[key], line: firstLine + lineOffset, text });
     }
@@ -102,9 +113,27 @@ export function extractBrief(description, { includeEvidence = false } = {}) {
     const match = pattern.exec(source);
     if (match) add('kind', kind, match);
   }
-  for (const [city, pattern] of Object.entries(cityNames)) {
-    const match = pattern.exec(source);
-    if (match) add('city', city, match);
+  const cityDeclarations = [...normalized.matchAll(labeledCity)];
+  if (cityDeclarations.length) {
+    const seen = new Set();
+    let invalid = false;
+    for (const match of cityDeclarations) {
+      if (!match[1].trim()) continue;
+      const names = namedCities(match[1]);
+      if (!names.length) invalid = true;
+      for (const city of names) {
+        const key = city.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        add('city', city, match, normalized);
+      }
+    }
+    if (invalid && seen.size === 1) candidates.city.clear();
+  } else {
+    for (const [city, pattern] of Object.entries(cityNames)) {
+      const match = pattern.exec(source);
+      if (match) add('city', city, match);
+    }
   }
   for (const [key, label] of Object.entries(axisDimensions)) {
     const explicit = new RegExp(String.raw`${label}\s*[:=]?\s*${metricLength}`, 'gu');

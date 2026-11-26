@@ -45,6 +45,8 @@ test('uses local Ollama structured chat and keeps full, incomplete and conflicti
   assert.equal(await suggestBriefCity(description, 'test-model', provider), 'Tabouk');
   assert.equal(await suggestBriefCity('في الرياض أو جدة', 'test-model', provider), null);
   assert.equal(await suggestBriefCity('فيلا في جدة', 'test-model', provider), null);
+  assert.equal(await suggestBriefCity('Project city: Al Ula', 'test-model', provider), null);
+  assert.equal(await suggestBriefCity('Ville : Tabouk ou Al Ula', 'test-model', provider), null);
   assert.equal(requests, 2);
   assert.equal(await suggestBriefCity('فيلا من طابقين', 'test-model', async url =>
     url.endsWith('/api/tags') ? available() : Response.json({ message: { content: '{"city":"حائل"}' } })), null);
