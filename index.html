@@ -265,8 +265,12 @@
       <button id="exportBriefDxf" type="button" disabled>تنزيل المعاينة DXF</button>
       <button id="exportBriefIfc" type="button" disabled>تنزيل الفراغات المجسّمة IFC4</button>
       <button id="exportBriefSchedule" type="button" disabled>تنزيل جدول الفراغات CSV</button>
-      <button id="insertBriefPlan" type="button" disabled>إضافة التوزيع إلى طابق الرسم الفارغ</button>
     </form>
+    <div id="briefAppendPanel" hidden>
+      <label class="clear-room"><input id="briefAppendRooms" type="checkbox"> أضف الفراغات فقط إلى الرسم الحالي</label>
+      <p>تُستخدم إحداثيات الطابق الحالي بالمتر. تبقى العناصر والقياسات محفوظة، وتبقى خطوط الأرض والارتدادات وحدود الفراغات المقترحة في المعاينة. راجع مواضع الجدران والبلاطات في مساحة العمل.</p>
+    </div>
+    <button id="insertBriefPlan" type="button" disabled>إضافة التوزيع إلى طابق الرسم</button>
     <p id="briefPlanStatus" role="status"></p>
     <svg id="briefPlanPreview" hidden viewBox="0 0 720 420" role="img" aria-label="حد الأرض وتوزيع الفراغات بالمقياس النسبي"></svg>
     <ul id="briefPlanRooms" aria-label="أسماء الفراغات المرقمة وأبعادها" hidden></ul>

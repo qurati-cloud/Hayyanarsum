@@ -1,4 +1,4 @@
-import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
+import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefRoomEdges, briefRoomSchedule, briefRoomConflict, briefFields, cleanBrief, cleanBriefRooms, cleanSetbacks, setbackSides, extractBrief, extractBriefRooms, extractBriefSetbacks, missingBriefFields } from './project-brief.js';
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
@@ -1439,6 +1439,8 @@ let briefPlan;
 function clearBriefPlan() {
   briefPlan = undefined;
   $('insertBriefPlan').disabled = true;
+  $('briefAppendPanel').hidden = true;
+  $('briefAppendRooms').checked = false;
   $('exportBriefDxf').disabled = true;
   $('exportBriefIfc').disabled = true;
   $('exportBriefSchedule').disabled = true;
@@ -1460,6 +1462,18 @@ function drawBriefPreview(plan) {
   const y = (420 - scale * plan.depth) / 2;
   canvas.append(el('rect', { x, y, width: plan.frontage * scale, height: plan.depth * scale,
     fill: '#f8f6ef', stroke: '#47677b', 'stroke-width': 2 }));
+  for (const room of plan.existingRooms) {
+    const left = Math.max(0, room.x), top = Math.max(0, room.y);
+    const w = Math.min(plan.frontage, room.x + room.w) - left;
+    const h = Math.min(plan.depth, room.y + room.h) - top;
+    if (w <= 0 || h <= 0) continue;
+    const outline = el('rect', { x: x + left * scale, y: y + top * scale, width: w * scale,
+      height: h * scale, fill: '#b8bcc34d', stroke: '#596171', 'stroke-dasharray': '5 3' });
+    const title = el('title');
+    title.textContent = 'فراغ قائم · ' + room.name;
+    outline.append(title);
+    canvas.append(outline);
+  }
   for (const [index, room] of plan.rooms.entries()) {
     const left = x + room.x * scale, top = y + room.y * scale;
     const w = room.w * scale, h = room.h * scale;
@@ -1485,9 +1499,9 @@ function drawBriefPreview(plan) {
       width: (right - left) * scale, height: (rear - front) * scale,
       fill: 'none', stroke: '#956a28', 'stroke-width': 2, 'stroke-dasharray': '6 4' }));
   }
-  canvas.setAttribute('aria-label', plan.envelope
-    ? 'حد الأرض والحد المرجعي المتقطع وتوزيع الفراغات بالمقياس النسبي'
-    : 'حد الأرض وتوزيع الفراغات بالمقياس النسبي');
+  canvas.setAttribute('aria-label', 'حد الأرض وتوزيع الفراغات بالمقياس النسبي' +
+    (plan.envelope ? ' مع الحد المرجعي المتقطع' : '') +
+    (plan.existingRooms.length ? ' والفراغات القائمة بالرمادي' : ''));
   canvas.hidden = false;
   const legend = $('briefPlanRooms');
   legend.replaceChildren(...plan.rooms.map((room, index) => {
@@ -1507,7 +1521,14 @@ function drawBriefPreview(plan) {
   drawModelFaces($('briefModel'), roomProjection(solids, 35), null);
 }
 
-const briefTargetIsEmpty = () => levelShapes().length === 0 && levelMeasurements().length === 0;
+const briefFloorContents = () => ({ shapes: levelShapes(), measurements: levelMeasurements() });
+
+function updateBriefInsertButton() {
+  $('insertBriefPlan').disabled = !briefPlan || Boolean(briefPlan.roomConflict) ||
+    (briefPlan.occupied && !$('briefAppendRooms').checked);
+}
+
+$('briefAppendRooms').onchange = updateBriefInsertButton;
 function updateBriefRoomFeedback(row) {
   const name = row.querySelector('[data-room="name"]').value.trim();
   const dimensions = [
@@ -1683,12 +1704,18 @@ $('briefLayoutForm').onsubmit = event => {
     return;
   }
   const level = elementLevel({ levelId: S.activeLevel }, S.levels);
-  briefPlan = { ...plan, levelId: level.id, level: { ...level },
+  const floor = briefFloorContents();
+  const occupied = floor.shapes.length > 0 || floor.measurements.length > 0;
+  const roomConflict = briefRoomConflict(plan.rooms, floor.shapes);
+  briefPlan = { ...plan, levelId: level.id, level: { ...level }, occupied, roomConflict,
+    existingRooms: floor.shapes.filter(shape => shape.type === 'room'),
+    floorSnapshot: JSON.stringify(floor),
     rooms: plan.rooms.map(room => ({ ...room, id: crypto.randomUUID() })),
     roomEdges: $('briefUseRoomEdges').checked ? briefRoomEdges(plan.rooms) : undefined };
   drawBriefPreview(briefPlan);
-  const empty = briefTargetIsEmpty();
-  $('insertBriefPlan').disabled = !empty;
+  $('briefAppendPanel').hidden = !occupied || Boolean(roomConflict);
+  $('insertBriefPlan').textContent = occupied ? 'إضافة الفراغات إلى الطابق الحالي' : 'إضافة التوزيع إلى طابق الرسم';
+  updateBriefInsertButton();
   $('exportBriefDxf').disabled = false;
   $('exportBriefIfc').disabled = !briefPlan.rooms.some(isIfcSpace);
   $('exportBriefSchedule').disabled = false;
@@ -1709,8 +1736,10 @@ $('briefLayoutForm').onsubmit = event => {
     (layout.automatic ? 'الحد الأقصى للفراغات في الصف المقترح ' + thermalLabel(plan.columns) + '. ' : '') +
     (plan.envelope ? 'المساحة داخل الحدود المرجعية ' +
       thermalLabel((plan.envelope.right - plan.envelope.left) * (plan.envelope.rear - plan.envelope.front)) + ' م². ' : '') +
-    (empty ? 'طابق الرسم ' + elementLevel(briefPlan, S.levels).name + '.' :
-      'اختر طابق رسم فارغًا ثم أعد المعاينة للإضافة.');
+    'طابق الرسم ' + level.name + '. ' +
+    (occupied && briefPlan.existingRooms.length ? 'الفراغات القائمة داخل الأرض تظهر بالرمادي. ' : '') +
+    (roomConflict ? 'يتداخل الفراغ المقترح «' + roomConflict.proposed +
+      '» مع الفراغ القائم «' + roomConflict.existing + '». عدّل الموقع ثم أعد المعاينة.' : '');
 };
 $('refineBriefPositions').onclick = () => {
   if (!briefPlan || $('briefLayoutMode').value !== 'custom') return;
@@ -1777,12 +1806,17 @@ $('exportBriefIfc').onclick = () => {
   }
 };
 $('insertBriefPlan').onclick = () => {
-  if (!briefPlan || briefPlan.levelId !== S.activeLevel || !briefTargetIsEmpty()) {
+  const level = S.levels.find(item => item.id === S.activeLevel);
+  if (!briefPlan || !level || briefPlan.levelId !== level.id || briefPlan.level.name !== level.name ||
+      briefPlan.level.elevation !== level.elevation || briefPlan.floorSnapshot !== JSON.stringify(briefFloorContents())) {
     clearBriefPlan();
     $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة.';
     return;
   }
-  const shapes = [...briefPlan.references, ...briefPlan.rooms, ...(briefPlan.roomEdges ?? [])];
+  if ($('insertBriefPlan').disabled ||
+      (briefPlan.occupied && !$('briefAppendRooms').checked)) return;
+  const { occupied, rooms, references, roomEdges } = briefPlan;
+  const shapes = occupied ? rooms : [...references, ...rooms, ...(roomEdges ?? [])];
   if (S.shapes.length + shapes.length > 5000 || !shapes.every(valid)) {
     $('briefPlanStatus').textContent = 'تعذّر إدراج التوزيع. تحقق من الأبعاد وحدّ عناصر المشروع.';
     return;
@@ -1793,7 +1827,7 @@ $('insertBriefPlan').onclick = () => {
   fitDrawing = true;
   selectShape(null);
   document.querySelector('[data-view="workspace"]').click();
-  $('mode').textContent = 'أُضيفت حدود الأرض والغرف القابلة للتعديل.';
+  $('mode').textContent = occupied ? 'أُضيفت الفراغات إلى الرسم الحالي.' : 'أُضيفت حدود الأرض والفراغات القابلة للتعديل.';
 };
 
 function readProject(data) {

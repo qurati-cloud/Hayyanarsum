@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanBrief, extractBrief, missingBriefFields } from '../project-brief.js';
+import { briefRoomConflict, cleanBrief, extractBrief, missingBriefFields } from '../project-brief.js';
 
 test('extracts explicitly named Arabic inputs, including dual storeys and decimal metres', () => {
   const { data, conflicts } = extractBrief('فيلا في الرياض من طابقين بأربع غرف نوم. عرض الأرض ٢٠٫٥ متر، وعمق الأرض ٣٠ م.');
@@ -434,4 +434,18 @@ test('room edges leave real gaps and merge only floating-point differences at sh
   ]);
   assert.equal(edges.filter(({ x, x2 }) => x === 0.3 && x2 === 0.3).length, 1);
   assert.ok(edges.filter(({ y, y2 }) => y === 0 && y2 === 0).every(({ x, x2 }) => x >= 2 || x2 <= 1.3));
+});
+
+test('inserting a brief into an existing plan allows touching rooms and reports named overlaps only for rooms', () => {
+  const proposed = { type: 'room', name: 'مجلس', x: 2, y: 4, w: 3, h: 2 };
+  const existing = { type: 'room', name: 'مطبخ قائم', x: -2, y: 4.5, w: 4, h: 2 };
+  const slab = { ...proposed, type: 'slab', name: 'بلاطة قائمة' };
+  const wall = { type: 'wall', name: 'جدار قائم', x: 2, y: 4.5, x2: 5, y2: 4.5 };
+  assert.equal(briefRoomConflict([proposed], [existing, slab, wall]), null);
+  const overlap = { ...existing, w: 4.01 };
+  assert.deepEqual(briefRoomConflict([proposed], [slab, wall, overlap]),
+    { proposed: 'مجلس', existing: 'مطبخ قائم' });
+  assert.equal(briefRoomConflict([{ ...proposed, y: 6.5 }], [overlap]), null);
+  assert.equal(briefRoomConflict([proposed], []), null);
+  assert.equal(briefRoomConflict([], [overlap]), null);
 });

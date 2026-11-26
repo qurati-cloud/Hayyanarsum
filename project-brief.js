@@ -180,6 +180,17 @@ function intervalsOverlap(start, end, otherStart, otherEnd) {
   return !fits(end, otherStart) && !fits(otherEnd, start);
 }
 
+export function briefRoomConflict(proposedRooms, currentShapes) {
+  const currentRooms = currentShapes.filter(shape => shape.type === 'room');
+  for (const room of proposedRooms) {
+    const existing = currentRooms.find(shape =>
+      intervalsOverlap(room.x, room.x + room.w, shape.x, shape.x + shape.w) &&
+      intervalsOverlap(room.y, room.y + room.h, shape.y, shape.y + shape.h));
+    if (existing) return { proposed: room.name, existing: existing.name };
+  }
+  return null;
+}
+
 function proposedCoordinate(block, bounds, placed) {
   const yOptions = block.y == null
     ? [...new Set([bounds.front, ...placed.map(room => room.y + room.h)])].sort((a, b) => a - b)
