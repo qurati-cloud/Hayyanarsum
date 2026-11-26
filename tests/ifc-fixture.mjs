@@ -1,4 +1,5 @@
 import { exportIfc } from '../ifc.js';
+import { extractBriefRooms, customRoomBlockPlan } from '../project-brief.js';
 
 const wall = {
   id: '22334455-6677-4899-aabb-ccddeeff0011',
@@ -21,4 +22,8 @@ const assemblies = [
   { id:'wall-thermal', kind:'wall', name:'عزل الجدار', inside:.13, outside:.04, layers:[{ mm:100, conductivity:.2 }] },
   { id:'roof-thermal', kind:'roof', name:'عزل السقف', inside:.13, outside:.04, layers:[{ mm:50, conductivity:.04 }] },
 ];
-process.stdout.write(exportIfc([wall, upperWall, slab], 'مشروع الاختبار', levels, assemblies));
+const brief = extractBriefRooms('مجلس: ٤ × ٥ م؛ الموضع: ١ × ٢ م؛ الارتفاع: ٢٫٨ م\nمطبخ: ٣ × ٣ م؛ الموضع: ٥ × ٢ م');
+const { rooms } = customRoomBlockPlan({ frontage: 20, depth: 30 }, { coordinates: true }, brief);
+const space = { ...rooms[0], levelId: 'upper', id: '22334455-6677-4899-aabb-ccddeeff0014' };
+const shapes = process.argv.includes('--spaces-only') ? [space, rooms[1]] : [wall, upperWall, slab, space, rooms[1]];
+process.stdout.write(exportIfc(shapes, 'مشروع الاختبار', levels, assemblies));

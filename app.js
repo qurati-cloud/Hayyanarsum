@@ -2,7 +2,7 @@ import { bedroomBlockPlan, customRoomBlockPlan, briefPreviewDxf, briefFields, cl
 import { dxfUnitLabels, maximumDxfBytes, readDxf } from './dxf-import.js';
 import { exportCoordinationBcf } from './bcf.js';
 import { wallSlabClashes } from './coordination.js';
-import { exportIfc, isIfcSlab, isIfcWall } from './ifc.js';
+import { exportIfc, isIfcSlab, isIfcSpace, isIfcWall } from './ifc.js';
 import { cleanAssembly, cleanThermalAssemblies, compareAssembly, elementThermalKind, evaluateAssembly,
   evaluateEnvelopeElement, evaluateEnvelopeOpening, cleanTransmissionScenario, evaluateTransmission, thermalKinds } from './thermal.js';
 import { slabVolumeSummary, wallVolumeSummary } from './wall-volume.js';
@@ -1189,7 +1189,7 @@ for (const source of saudiSources) {
   row.append(category, body);
   $('sources').append(row);
 }
-const styles=['النجدية','النجدية الشمالية','ساحل تبوك','المدينة المنورة','ريف المدينة المنورة','الحجازية الساحلية','الطائف','جبال السروات','أصدار عسير','سفوح تهامة','ساحل تهامة','مرتفعات أبها','جزر فرسان','بيشة الصحراوية','نجران','واحات الأحساء','القطيف','الساحل الشرقي','النجدية الشرقية'];$('styles').innerHTML=styles.map(x=>'<span>عمارة '+x+'</span>').join('');const mods=[['الرسم ثنائي الأبعاد','نواة عملية'],['DXF / SVG / JSON','تصدير فعلي'],['الكميات والتكلفة','نواة عملية'],['التحقق السعودي','مقارنات استرشادية'],['IFC4','تصدير الجدران والفتحات'],['التحليل الإنشائي','غير منفذ'],['MEP والمحاكاة','غير منفذ'],['التعاون والحسابات','غير منفذ']];$('modules').innerHTML=mods.map(x=>`<div class="module"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');$('projectForm').onsubmit=e=>{e.preventDefault();S.project={...S.project,name:$('projectName').value,city:$('projectCity').value,revision:$('revision').value,description:$('description').value};localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('saved').textContent='تم الحفظ';loadSaudiFields()};
+const styles=['النجدية','النجدية الشمالية','ساحل تبوك','المدينة المنورة','ريف المدينة المنورة','الحجازية الساحلية','الطائف','جبال السروات','أصدار عسير','سفوح تهامة','ساحل تهامة','مرتفعات أبها','جزر فرسان','بيشة الصحراوية','نجران','واحات الأحساء','القطيف','الساحل الشرقي','النجدية الشرقية'];$('styles').innerHTML=styles.map(x=>'<span>عمارة '+x+'</span>').join('');const mods=[['الرسم ثنائي الأبعاد','نواة عملية'],['DXF / SVG / JSON','تصدير فعلي'],['الكميات والتكلفة','نواة عملية'],['التحقق السعودي','مقارنات استرشادية'],['IFC4','تصدير الجدران والبلاطات والفراغات'],['التحليل الإنشائي','غير منفذ'],['MEP والمحاكاة','غير منفذ'],['التعاون والحسابات','غير منفذ']];$('modules').innerHTML=mods.map(x=>`<div class="module"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');$('projectForm').onsubmit=e=>{e.preventDefault();S.project={...S.project,name:$('projectName').value,city:$('projectCity').value,revision:$('revision').value,description:$('description').value};localStorage.setItem('hayyanarsum-v2',JSON.stringify(S));$('saved').textContent='تم الحفظ';loadSaudiFields()};
 const briefReview = $('briefReviewForm');
 const briefField = key => briefReview.elements.namedItem(key);
 let briefConflicts = [];
@@ -1755,18 +1755,18 @@ function loadSaudiFields() {
   runChecks();
 }
 function updateIfcExport() {
-  const count = S.shapes.filter(shape => isIfcWall(shape) || isIfcSlab(shape)).length;
+  const count = S.shapes.filter(shape => isIfcWall(shape) || isIfcSlab(shape) || isIfcSpace(shape)).length;
   $('exportIFC').disabled = count === 0;
   $('ifcStatus').textContent = count
-    ? 'عناصر الجدران والبلاطات المشمولة بالتصدير: ' + count + '.'
-    : 'أضف بلاطة أو أدخل سماكة جدار وارتفاعه لتفعيل التصدير.';
+    ? 'عناصر الجدران والبلاطات والفراغات المشمولة بالتصدير: ' + count + '.'
+    : 'أضف بلاطة، أو أدخل أبعاد جدار، أو حدّد ارتفاع فراغ لتفعيل التصدير.';
 }
 $('exportIFC').onclick = () => {
   try {
     dl('hayyanarsum.ifc', exportIfc(S.shapes, S.project.name, S.levels, thermalList()), 'application/x-step');
     $('ifcStatus').textContent = 'جُهّز ملف IFC4 لعناصر المبنى.';
   } catch {
-    $('ifcStatus').textContent = 'تعذّر إنشاء ملف IFC. تحقق من أبعاد الجدران والفتحات.';
+    $('ifcStatus').textContent = 'تعذّر إنشاء ملف IFC. تحقق من أبعاد عناصر النموذج وطوابقها.';
   }
 };
 try {

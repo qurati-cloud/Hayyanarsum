@@ -94,8 +94,39 @@ def validate_export():
     print("Validated IFC4 geometry, opening volumes, and thermal properties with their units.")
 
 
+def validate_spaces():
+    root = Path(__file__).resolve().parent.parent
+    for flags in [[], ["--spaces-only"]]:
+        source = subprocess.check_output(
+            ["node", "tests/ifc-fixture.mjs", *flags], cwd=root, text=True, encoding="ascii"
+        )
+        model = ifcopenshell.file.from_string(source)
+        logger = ifcopenshell.validate.json_logger()
+        ifcopenshell.validate.validate(model, logger, express_rules=True)
+        assert not logger.statements, logger.statements
+        space, = model.by_type("IfcSpace")
+        assert space.Name == "مجلس"
+        assert ifcopenshell.guid.expand(space.GlobalId) == "2233445566774899aabbccddeeff0014"
+        aggregate, = space.Decomposes
+        storey = aggregate.RelatingObject
+        assert storey.is_a("IfcBuildingStorey") and storey.Elevation == 3.25
+        assert not any(space in rel.RelatedElements for rel in model.by_type("IfcRelContainedInSpatialStructure"))
+        assert bool(model.by_type("IfcWall")) == (not flags)
+
+        world = ifcopenshell.geom.settings()
+        world.set("use-world-coords", True)
+        geometry = ifcopenshell.geom.create_shape(world, space)
+        vertices = geometry.geometry.verts
+        for axis, (low, high) in enumerate([(1, 5), (-7, -2), (3.25, 6.05)]):
+            values = vertices[axis::3]
+            assert math.isclose(min(values), low) and math.isclose(max(values), high), values
+        assert math.isclose(ifcopenshell.util.shape.get_volume(geometry.geometry), 56)
+    print("Verified independent IfcSpace geometry, UUID, storey and spaces-only export.")
+
+
 if __name__ == "__main__":
     from validate_bcf import validate as validate_bcf_export
 
     validate_export()
+    validate_spaces()
     validate_bcf_export()

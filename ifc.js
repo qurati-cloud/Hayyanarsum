@@ -1,4 +1,4 @@
-import { elementLevel, length, slabArea, slabNetArea, slabVolume, valid, validateLevels, wallQuantities } from './engine.js';
+import { elementLevel, length, slabArea, slabNetArea, slabVolume, valid, validHeight, validateLevels, wallQuantities } from './engine.js';
 import { evaluateEnvelopeElement, evaluateEnvelopeOpening } from './thermal.js';
 
 const ifcAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -44,11 +44,13 @@ const globalId = guid => "'" + (guid ?? compressGuid(crypto.randomUUID())) + "'"
 
 export const isIfcWall = shape => shape?.type === 'wall' && shape.thickness != null && valid(shape);
 export const isIfcSlab = shape => shape?.type === 'slab' && valid(shape);
+export const isIfcSpace = shape => shape?.type === 'room' && validHeight(shape.z) && valid(shape);
 
 export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblies = []) {
   const walls = shapes.filter(isIfcWall);
   const slabs = shapes.filter(isIfcSlab);
-  if (!walls.length && !slabs.length) throw new TypeError('No modeled building elements to export');
+  const spaces = shapes.filter(isIfcSpace);
+  if (!walls.length && !slabs.length && !spaces.length) throw new TypeError('No modeled building elements to export');
   const storeys = validateLevels(levels);
   const data = [];
   const assemblyIndex = new Map(assemblies.map(assembly => [assembly.id, assembly]));
@@ -87,7 +89,7 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
   const spatial = new Map(storeys.map(level => {
     const placement = local(buildingPlacement, 0, 0, level.elevation);
     const ref = entity('IFCBUILDINGSTOREY', ...root(level.name), missing, placement, missing, missing, mode, real(level.elevation));
-    return [level.id, { ref, placement, contained: [] }];
+    return [level.id, { ref, placement, contained: [], spaces: [] }];
   }));
   entity('IFCRELAGGREGATES', ...root(''), project, tuple([site]));
   entity('IFCRELAGGREGATES', ...root(''), site, tuple([building]));
@@ -180,7 +182,16 @@ export function exportIfc(shapes, projectName = 'Hayyanarsum', levels, assemblie
     entity('IFCRELDEFINESBYPROPERTIES', ...root(''), tuple([ref]), set);
     addThermalProperty(evaluateEnvelopeElement(slab, assemblyIndex), ref, 'Pset_SlabCommon');
   }
-  for (const { ref, contained } of spatial.values()) {
+  for (const space of spaces) {
+    const storey = spatial.get(elementLevel(space, storeys)?.id);
+    if (!storey) throw new TypeError('Space refers to an unknown storey');
+    const pose = local(storey.placement, space.x, -(space.y + space.h / 2), 0);
+    const ref = entity('IFCSPACE', ...root(space.name || 'Space', ifcElementGuid(space.id)),
+      missing, pose, box(space.w, space.h, space.z), missing, mode, '.NOTDEFINED.', missing);
+    storey.spaces.push(ref);
+  }
+  for (const { ref, contained, spaces } of spatial.values()) {
+    if (spaces.length) entity('IFCRELAGGREGATES', ...root(''), ref, tuple(spaces));
     if (contained.length) entity('IFCRELCONTAINEDINSPATIALSTRUCTURE', ...root(''), tuple(contained), ref);
   }
   return [
