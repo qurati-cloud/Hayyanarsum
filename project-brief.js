@@ -493,6 +493,7 @@ export function cleanBriefRooms(rooms) {
 }
 
 const customRoomPrefix = /^(?:فراغ|space|espace)\s+/iu;
+const roomListMarker = /^(?:[-•]\s*|(?:[+*]|\d+[.)])\s+)/u;
 const roomDimensions = new RegExp(String.raw`^${metricPair}\.?$`, 'iu');
 
 const roomClause = /^\s*(الموضع|موضع|position|الارتفاع|ارتفاع|height|hauteur|العرض|عرض|width|largeur|العمق|عمق|depth|profondeur)(?:\s*:\s*|\s+)(.*?)\s*$/iu;
@@ -518,7 +519,7 @@ export function extractBriefRooms(description) {
     if (clauses.some(clause => !clause)) continue;
     if (leadingClause) clauses.unshift(leadingClause);
 
-    const label = normalizeNumericInput(rawName.replace(/^\s*[-•]\s*/u, ''));
+    const label = normalizeNumericInput(rawName).replace(roomListMarker, '').trim();
     const custom = customRoomPrefix.test(label);
     const name = label.replace(customRoomPrefix, '').trim();
     if (!name || name.length > 160) continue;

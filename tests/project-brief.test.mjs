@@ -89,6 +89,27 @@ test('explicit room lines populate types and metric dimensions while leaving mis
   ]);
 });
 
+test('pasted multilingual room lists preserve order, room numbers and entered metric values', async () => {
+  const { extractBriefRooms } = await import('../project-brief.js');
+  const rooms = extractBriefRooms([
+    '  ١. مجلس: ٤ × ٥ م؛ الموضع: ٠ × ٢ م',
+    '2) Bedroom 2: 300 × 400 cm',
+    '* Cuisine: profondeur : 3 m',
+    '+ Salle de bains: 2 × 2 m',
+    '۵. فراغ مخزن 3: 200 × 300 cm',
+    '6) Kitchen:',
+    '-• قائمة عناوين',
+    '7. مجلس: 4 × 6 m',
+    '8. اسم غير معروف: 9 × 9 m',
+  ].join('\n'));
+  assert.deepEqual(rooms.map(({ name, w, h }) => [name, w, h]), [
+    ['مجلس', 4, null], ['Bedroom 2', 3, 4], ['Cuisine', null, 3],
+    ['Salle de bains', 2, 2], ['مخزن 3', 2, 3], ['Kitchen', null, null],
+  ]);
+  assert.deepEqual([rooms[0].x, rooms[0].y], [0, 2]);
+  assert.equal(rooms[1].roomUse, 'bedroom');
+});
+
 test('user-entered setbacks bound the room arrangement and create a separate DXF reference layer', async () => {
   const { customRoomBlockPlan } = await import('../project-brief.js');
   const { dxf } = await import('../engine.js');
