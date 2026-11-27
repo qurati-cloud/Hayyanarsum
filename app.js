@@ -216,8 +216,14 @@ function renderLevels() {
   const active = S.levels.find(level => level.id === S.activeLevel);
   const ordered = [...S.levels].sort((a, b) => a.elevation - b.elevation);
   const levelOption = level => new Option(level.name + ' · ' + level.elevation + ' م', level.id);
-  $('activeLevel').replaceChildren(...ordered.map(levelOption));
-  $('activeLevel').value = active.id;
+  for (const id of ['activeLevel', 'briefActiveLevel']) {
+    $(id).replaceChildren(...ordered.map(levelOption));
+    $(id).value = active.id;
+  }
+  if (briefPlan && !briefFloorMatches(briefPlan)) {
+    clearBriefPlan();
+    $('briefPlanStatus').textContent = 'تغيّر طابق الرسم أو محتواه. أعد المعاينة لإظهار التوزيع المحدّث.';
+  }
   $('levelName').value = active.name;
   $('levelElevation').value = active.elevation;
   $('moveLevel').replaceChildren(new Option('اختر طابقًا', ''),
@@ -242,7 +248,9 @@ function updateLevels(add) {
   $('levelStatus').textContent = add ? 'أُضيف الطابق وأصبح طابق الرسم.' : 'حُدّث الطابق.';
 }
 
-$('activeLevel').onchange = event => activateLevel(event.target.value);
+for (const id of ['activeLevel', 'briefActiveLevel']) {
+  $(id).onchange = event => activateLevel(event.target.value);
+}
 $('levelAdd').onclick = () => updateLevels(true);
 $('levelUpdate').onclick = () => updateLevels(false);
 $('levelRemove').onclick = () => {
