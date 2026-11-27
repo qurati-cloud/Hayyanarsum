@@ -502,10 +502,20 @@ const roomMeasures = {
   h: /^(?:العمق|عمق|depth|profondeur)$/iu,
   z: /^(?:الارتفاع|ارتفاع|height|hauteur)$/iu,
 };
-const mergeRoomMeasure = (previous, value, validate) =>
-  validate(value) && (previous === undefined || previous === value) ? value : null;
+function mergeRoomMeasure(room, measure, value, validate) {
+  const previous = room[measure];
+  if (!validate(value)) {
+    room.issues[measure] = 'invalid';
+    room[measure] = null;
+  } else if (previous !== undefined && previous !== value) {
+    room.issues[measure] ??= 'conflict';
+    room[measure] = null;
+  } else {
+    room[measure] = value;
+  }
+}
 
-export function extractBriefRooms(description) {
+export function extractBriefRooms(description, { includeIssues = false } = {}) {
   const rooms = new Map();
   const positions = new Map();
   for (const line of description.slice(0, 4000).normalize('NFKC').split(/\r?\n/u)) {
@@ -528,13 +538,13 @@ export function extractBriefRooms(description) {
     const use = Object.keys(roomLabels).find(type => roomLabels[type].test(kind));
     if ((!use && !custom) || (!rooms.has(key) && rooms.size >= 100)) continue;
 
-    const room = rooms.get(key) ?? { name, roomUse: use };
+    const room = rooms.get(key) ?? { name, roomUse: use, issues: {} };
     if (dimensions && !leadingClause) {
       const match = roomDimensions.exec(dimensions);
       const pair = match ? metresPair(match) : [];
       const [w, h] = pair.every(Number.isFinite) ? pair : [];
-      room.w = mergeRoomMeasure(room.w, w, validRoomDimension);
-      room.h = mergeRoomMeasure(room.h, h, validRoomDimension);
+      mergeRoomMeasure(room, 'w', w, validRoomDimension);
+      mergeRoomMeasure(room, 'h', h, validRoomDimension);
     }
 
     for (const [, field, rawValue] of clauses) {
@@ -544,7 +554,7 @@ export function extractBriefRooms(description) {
         if (!value && measure !== 'z') continue;
         const match = standaloneLength.exec(value);
         const metric = match ? metres(match[1], match[2]) : NaN;
-        room[measure] = mergeRoomMeasure(room[measure], metric, measure === 'z' ? validHeight : validRoomDimension);
+        mergeRoomMeasure(room, measure, metric, measure === 'z' ? validHeight : validRoomDimension);
         continue;
       }
       const match = roomDimensions.exec(value);
@@ -561,6 +571,7 @@ export function extractBriefRooms(description) {
     const [dimensions] = cleanBriefRooms([room]);
     const [x, y] = positions.get(key) ?? [null, null];
     return { ...dimensions, ...(positions.has(key) ? { x, y } : {}),
-      ...(Object.hasOwn(room, 'z') ? { z: room.z } : {}) };
+      ...(Object.hasOwn(room, 'z') ? { z: room.z } : {}),
+      ...(includeIssues && Object.keys(room.issues).length ? { issues: room.issues } : {}) };
   });
 }

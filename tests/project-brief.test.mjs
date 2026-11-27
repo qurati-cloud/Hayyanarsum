@@ -625,6 +625,26 @@ test('contradictions and unsupported units in named room dimensions leave only t
   assert.deepEqual(rooms.map(({ w, h }) => [w, h]), [[null, 5], [3, null], [4, 3]]);
 });
 
+test('room diagnostics distinguish omitted, conflicting and invalid measurements without guessing values', async () => {
+  const { extractBriefRooms, cleanBriefRooms } = await import('../project-brief.js');
+  const input = [
+    'مجلس: ٤ × ٥ م؛ الارتفاع: ٢٨٠ سم',
+    'مجلس: العرض: ٤٫٥ م؛ الارتفاع: ٢٫٩ م',
+    'مجلس: العرض: ٤٠٠ سم',
+    'Kitchen: width 3 m; depth 8 ft',
+    'Cuisine: profondeur : 3 m',
+    'Salon: 0 × 4 m',
+  ].join('\n');
+  const rooms = extractBriefRooms(input, { includeIssues: true });
+  assert.deepEqual(rooms.map(room => room.issues), [
+    { w: 'conflict', z: 'conflict' }, { h: 'invalid' }, undefined, { w: 'invalid' },
+  ]);
+  assert.deepEqual(rooms.map(({ w, h, z }) => [w, h, z]), [
+    [null, 5, null], [3, null, undefined], [null, 3, undefined], [null, 4, undefined],
+  ]);
+  assert.deepEqual(cleanBriefRooms(rooms), cleanBriefRooms(extractBriefRooms(input)));
+});
+
 test('an explicitly labeled project city is read locally in all three description languages', () => {
   for (const [description, city] of [
     ['فيلا. مكتب التصميم في الرياض.\nمدينة المشروع: حائل', 'حائل'],

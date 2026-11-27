@@ -1439,7 +1439,7 @@ $('briefExtractForm').onsubmit = event => {
   const description = $('briefDescription').value;
   const { data, conflicts, evidence } = extractBrief(description, { includeEvidence: true });
   renderBriefEvidence(evidence);
-  const rooms = extractBriefRooms(description);
+  const rooms = extractBriefRooms(description, { includeIssues: true });
   const containsPositions = rooms.some(room => Object.hasOwn(room, 'x'));
   const { setbacks, conflicts: disputedSetbacks, invalid } = extractBriefSetbacks(description);
   setbackConflicts = disputedSetbacks.filter(side => !manuallyEditedSetbacks.has(side));
@@ -1682,6 +1682,9 @@ function updateBriefInsertButton() {
 }
 
 $('briefAppendRooms').onchange = updateBriefInsertButton;
+const briefRoomIssues = new WeakMap();
+const briefRoomIssueLabels = { width: 'العرض', depth: 'العمق', z: 'الارتفاع' };
+
 function updateBriefRoomFeedback(row) {
   const name = row.querySelector('[data-room="name"]').value.trim();
   const dimensions = [
@@ -1701,8 +1704,12 @@ function updateBriefRoomFeedback(row) {
   }
   row.querySelector('legend').textContent = name || 'فراغ جديد';
   const feedback = row.querySelector('[data-room-feedback]');
-  feedback.hidden = missing.length === 0;
-  feedback.textContent = missing.length ? 'أدخل ' + missing.join(' و') + ' بالمتر قبل المعاينة.' : '';
+  const messages = Object.entries(briefRoomIssues.get(row) ?? {}).map(([key, issue]) =>
+    issue === 'conflict' ? 'ذُكرت قيم متعارضة لحقل ' + briefRoomIssueLabels[key] + '.' :
+      'تعذّر قراءة ' + briefRoomIssueLabels[key] + ' بقيمة ووحدة مدعومتين.');
+  if (missing.length) messages.push('أدخل ' + missing.join(' و') + ' بالمتر قبل المعاينة.');
+  feedback.hidden = messages.length === 0;
+  feedback.textContent = messages.join(' ');
 }
 
 function addBriefRoom(room = {}) {
@@ -1718,7 +1725,7 @@ function addBriefRoom(room = {}) {
     '<div class="two" data-room-placement hidden>' +
     '<label>موضع X (م)<input data-room="x" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required disabled></label>' +
     '<label>موضع Y (م)<input data-room="y" data-number inputmode="decimal" data-min="0" data-max="1000000" data-step="any" required disabled></label></div>' +
-    '<p data-room-feedback class="muted" hidden></p><button type="button">إزالة الفراغ</button>';
+    '<p data-room-feedback class="muted" role="status" hidden></p><button type="button">إزالة الفراغ</button>';
   const use = row.querySelector('select');
   for (const [value, option] of Object.entries(residentialSpaceRules)) use.add(new Option(option.label, value));
   row.querySelector('[data-room="name"]').value = room.name ?? '';
@@ -1729,6 +1736,11 @@ function addBriefRoom(room = {}) {
   if (room.z === null) row.querySelector('[data-room="z"]').placeholder = 'راجع الارتفاع المذكور في الوصف';
   row.querySelector('[data-room="x"]').value = room.x ?? '';
   row.querySelector('[data-room="y"]').value = room.y ?? '';
+  if (room.issues) {
+    const issues = Object.entries({ width: room.issues.w, depth: room.issues.h, z: room.issues.z })
+      .filter(([, issue]) => issue);
+    briefRoomIssues.set(row, Object.fromEntries(issues));
+  }
   updateBriefRoomPosition(row, $('briefPlacement').value === 'coordinates');
   row.querySelector('button').onclick = () => {
     row.remove();
@@ -1805,7 +1817,10 @@ $('briefFillPositions').onchange = updateBriefPlacement;
 $('briefLayoutForm').oninput = event => {
   if (event.target.matches('[data-room]')) {
     manuallyEditedBriefRooms = true;
-    updateBriefRoomFeedback(event.target.closest('fieldset'));
+    const row = event.target.closest('fieldset');
+    const issues = briefRoomIssues.get(row);
+    if (issues) delete issues[event.target.dataset.room];
+    updateBriefRoomFeedback(row);
   }
   const side = event.target.dataset.setbackSide;
   if (side) {
